@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+
+class AuthController extends Controller
+{
+    public function login(Request $request)
+    {
+        // 1. Validate the incoming request
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
+
+        // 2. Find the user by email
+        $user = User::where('email', $request->email)->first();
+
+        // 3. Check if user exists and password is correct
+        if (! $user || ! Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'message' => 'Invalid login credentials'
+            ], 401); // 401 Unauthorized
+        }
+
+        // 4. Generate the Sanctum Token
+        $token = $user->createToken('frontend-api-token')->plainTextToken;
+
+        // 5. Return the Token, User Data, Roles, and Permissions
+        return response()->json([
+            'access_token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
+            // Pluck just gets an array of the names, e.g., ["edit tours", "view dashboard"]
+            'roles' => $user->getRoleNames(),
+            'permissions' => $user->getAllPermissions()->pluck('name'),
+        ]);
+    }
+}
