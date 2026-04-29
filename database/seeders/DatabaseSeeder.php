@@ -3,23 +3,54 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // 1. Clear cached roles/permissions (Good practice when seeding)
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // 2. Define the core permissions your dashboard will use to hide/show UI
+        // TODO: This is just example permissions. Edit for actual app needs.
+        $permissions = [
+            'view dashboard',
+            'manage tours',
+            'manage venues',
+            'manage users',
+            'edit media'
+        ];
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate(['name' => $permission]);
+        }
+
+        // 3. Create Roles and assign permissions
+        $adminRole = Role::firstOrCreate(['name' => 'Super Admin']);
+        // Super Admins get everything
+        $adminRole->givePermissionTo(Permission::all());
+
+        $editorRole = Role::firstOrCreate(['name' => 'Editor']);
+        // Editors get a restricted subset
+        $editorRole->givePermissionTo(['manage tours', 'edit media', 'manage users', 'manage venues',]);
+
+        // 4. Create your Master Admin User
+        $adminUser = User::firstOrCreate(
+            ['email' => 'gio@gtc.co'],
+            [
+                'name' => 'Master Admin',
+                // TODO: Change this before real deployment!
+                'password' => Hash::make('GTCPassword123!'),
+            ]
+        );
+
+        // 5. Assign the Super Admin role to your user
+        if (!$adminUser->hasRole('Super Admin')) {
+            $adminUser->assignRole($adminRole);
+        }
     }
 }
