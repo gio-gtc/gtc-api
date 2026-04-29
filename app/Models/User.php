@@ -12,7 +12,17 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['company_id', 'first_name', 'last_name', 'avatar', 'email', 'password'])]
+#[Fillable([
+    'organisation_id', 
+    'first_name', 
+    'last_name', 
+    'job_title',
+    'department',
+    'phone_number',
+    'notes',
+    'avatar', 
+    'email', 
+    'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -30,8 +40,8 @@ class User extends Authenticatable
         ];
     }
 
-    public function company()
+    public function organisation()
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Organisation::class);
     }
 }

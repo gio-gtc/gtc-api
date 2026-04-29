@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
     'telephone', 'fax_number', 'bank_account_number', 'routing_number', 
     'rec_name', 'rec_tel'
 ])]
-class Company extends Model
+class Organisation extends Model
 {
     use HasFactory;
 
