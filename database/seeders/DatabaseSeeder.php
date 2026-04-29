@@ -40,11 +40,11 @@ class DatabaseSeeder extends Seeder
 
         // 4. Create your Master Admin User
         $adminUser = User::firstOrCreate(
-            ['email' => 'gio@gtc.co'],
+            ['email' => 'gio@gtc.co'], // <-- Use your actual email
             [
-                'name' => 'Master Admin',
-                // TODO: Change this before real deployment!
-                'password' => Hash::make('GTCPassword123!'),
+                'first_name' => 'Gio',
+                'last_name' => 'A',
+                'password' => Hash::make('GTCPassword123!'), // <-- Use your actual password
             ]
         );
 

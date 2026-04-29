@@ -34,10 +34,12 @@ class AuthController extends Controller
             'access_token' => $token,
             'user' => [
                 'id' => $user->id,
-                'name' => $user->name,
+                'company_id' => $user->company_id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
                 'email' => $user->email,
+                'avatar' => $user->avatar,
             ],
-            // Pluck just gets an array of the names, e.g., ["edit tours", "view dashboard"]
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),
         ]);
