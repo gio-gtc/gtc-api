@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\RegisterController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
@@ -11,7 +12,7 @@ use App\Http\Controllers\AuthController;
 | These routes do not require a token. Anyone can attempt to log in.
 */
 Route::post('/login', [AuthController::class, 'login']);
-
+Route::post('/register', [RegisterController::class, 'store']);
 /*
 |--------------------------------------------------------------------------
 | Protected Routes
