@@ -11,6 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use App\Notifications\FrontendPasswordResetNotification;
 
 #[Fillable([
     'organisation_id', 
@@ -43,5 +44,17 @@ class User extends Authenticatable
     public function organisation()
     {
         return $this->belongsTo(Organisation::class);
+    }
+
+    /**
+     * Send the password reset notification.
+     *
+     * @param  string  $token
+     * @return void
+     */
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        // This forces Laravel to use our custom notification pointing to gtc-laravel
+        $this->notify(new FrontendPasswordResetNotification($token));
     }
 }
