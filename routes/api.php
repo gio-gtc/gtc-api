@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
+use App\Http\Controllers\AccessRequestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,7 @@ Route::post('/register', [RegisterController::class, 'store']);
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 Route::get('/validate-reset-token', [PasswordResetController::class, 'validateToken']);
+Route::post('/request-access', [AccessRequestController::class, 'store']);
 
 /*
 |--------------------------------------------------------------------------
