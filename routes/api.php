@@ -1,18 +1,22 @@
 <?php
 
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\UserPasswordController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
 
 /*
 |--------------------------------------------------------------------------
 | Public Routes
 |--------------------------------------------------------------------------
-| These routes do not require a token. Anyone can attempt to log in.
+| These routes do not require a token.
 */
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [RegisterController::class, 'store']);
+Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
+Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 /*
 |--------------------------------------------------------------------------
 | Protected Routes
@@ -20,7 +24,7 @@ Route::post('/register', [RegisterController::class, 'store']);
 | These routes require a valid Sanctum token passed in the Authorization header.
 */
 Route::middleware('auth:sanctum')->group(function () {
-    
+
     // A simple route to test if our token and session are working
     Route::get('/me', function (Request $request) {
         return response()->json([
@@ -30,6 +34,8 @@ Route::middleware('auth:sanctum')->group(function () {
             'permissions' => $request->user()->getAllPermissions()->pluck('name'),
         ]);
     });
+
+    Route::put('/user/password', [UserPasswordController::class, 'update']);
 
     // In the future, your protected endpoints will go here:
     // Route::apiResource('tours', TourController::class);

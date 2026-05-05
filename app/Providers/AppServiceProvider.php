@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Auth\Notifications\ResetPassword;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +20,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        ResetPassword::createUrlUsing(function ($user, string $token) {
+            // We read the frontend URL from the .env file, fallback to localhost:8000
+            $frontendUrl = env('FRONTEND_URL', 'http://127.0.0.1:8000');
+            
+            // Build the exact URL format your React Router/Inertia is expecting
+            return $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
+        });
     }
 }
