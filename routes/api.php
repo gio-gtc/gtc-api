@@ -17,6 +17,8 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [RegisterController::class, 'store']);
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
+Route::get('/validate-reset-token', [PasswordResetController::class, 'validateToken']);
+
 /*
 |--------------------------------------------------------------------------
 | Protected Routes

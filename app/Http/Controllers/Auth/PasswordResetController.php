@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
+use App\Models\User;
 
 class PasswordResetController extends Controller
 {
@@ -58,5 +59,25 @@ class PasswordResetController extends Controller
         }
 
         return response()->json(['status' => __($status)]);
+    }
+
+    /**
+     * Validate the token before showing the reset form.
+     */
+    public function validateToken(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'token' => 'required'
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        // Check if the user exists AND if the token is valid
+        if (!$user || !Password::broker()->tokenExists($user, $request->token)) {
+            return response()->json(['message' => 'Invalid or expired token.'], 400);
+        }
+
+        return response()->json(['valid' => true], 200);
     }
 }
