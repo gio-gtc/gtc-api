@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
+use App\Http\Controllers\UserOnboardingController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,7 @@ Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkE
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 Route::get('/validate-reset-token', [PasswordResetController::class, 'validateToken']);
 Route::post('/request-access', [AccessRequestController::class, 'store']);
+Route::post('/users/set-password', [UserOnboardingController::class, 'setPassword']);
 
 /*
 |--------------------------------------------------------------------------
@@ -38,6 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::put('/user/password', [UserPasswordController::class, 'update']);
+
+    // TODO: Update when permissions/roles comes into play
+    Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
 
     // In the future, your protected endpoints will go here:
     // Route::apiResource('tours', TourController::class);
