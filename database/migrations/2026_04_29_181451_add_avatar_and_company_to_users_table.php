@@ -10,15 +10,15 @@ return new class extends Migration
             // avatar as a string (to hold the URL), allowed to be empty
             $table->string('avatar')->nullable()->after('last_name');
             
-            // company_id as an unsigned big integer (standard for Laravel IDs), allowed to be empty.
-            // Note: We are NOT adding a strict foreign key constraint yet because the 'companies' table does not exist!
-            $table->unsignedBigInteger('company_id')->nullable()->after('id');
+            // organisations_id as an unsigned big integer (standard for Laravel IDs), allowed to be empty.
+            // Note: We are NOT adding a strict foreign key constraint yet because the 'organisations' table does not exist!
+            $table->unsignedBigInteger('organisation_id')->nullable()->after('id');
         });
     }
 
     public function down(): void {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['avatar', 'company_id']);
+            $table->dropColumn(['avatar', 'organisation_id']);
         });
     }
 };

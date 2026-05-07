@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             // 1. Rename the existing column
-            $table->renameColumn('company_id', 'organisation_id');
+            $table->renameColumn('organisation_id', 'organisation_id');
 
             // 2. Add the new columns (all nullable so it doesn't break existing data)
             $table->string('job_title')->nullable()->after('last_name');
@@ -23,7 +23,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->renameColumn('organisation_id', 'company_id');
+            $table->renameColumn('organisation_id', 'organisation_id');
             $table->dropColumn(['job_title', 'department', 'phone_number', 'notes']);
         });
     }
