@@ -32,10 +32,6 @@ You have received a new request to access the platform.
     $createAccountUrl = $frontendUrl . '/dashboard?' . $queryParams;
 @endphp
 
-<x-mail::button :url="'mailto:' . $data['email'] . '?subject=GTC%20Force%20New%20Access%20Request'">
-Reply
-</x-mail::button>
-
 <x-mail::button :url="$createAccountUrl" color="success">
 Create Account
 </x-mail::button>
