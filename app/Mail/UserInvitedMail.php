@@ -28,7 +28,7 @@ class UserInvitedMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.user-invited',
+            markdown: 'emails.user-invited',
         );
     }
 }
