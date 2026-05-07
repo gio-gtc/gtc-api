@@ -7,7 +7,7 @@ You have received a new request to access the platform.
 **Email:** {{ $data['email'] }}<br>
 **Organisation:** {{ $data['organisation'] }}<br>
 **Job Title:** {{ $data['job_title'] }}<br>
-**Phone:** {{ $data['phone'] ?? 'N/A' }}
+**Phone:** {{ $data['phone_number'] ?? 'N/A' }}
 
 **Why they need access:**
 > {{ $data['details'] }}
@@ -24,7 +24,7 @@ You have received a new request to access the platform.
         'email' => $data['email'],
         'organisation' => $data['organisation'],
         'job_title' => $data['job_title'],
-        'phone' => $data['phone'] ?? '',
+        'phone_number' => $data['phone_number'] ?? '',
     ]);
 
     // 3. Combine them to make the final link

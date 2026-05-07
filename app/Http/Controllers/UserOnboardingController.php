@@ -22,6 +22,8 @@ class UserOnboardingController extends Controller
             // The 'unique:users' rule automatically blocks duplicates!
             'email'        => 'required|email|unique:users,email', 
             'organisation' => 'required|string|max:255',
+            'phone_number' => 'nullable|string|max:50',
+            'job_title'    => 'nullable|string|max:255',
         ]);
 
         // Create the user with a secure, random dummy password and NO verification timestamp
@@ -30,6 +32,8 @@ class UserOnboardingController extends Controller
             'last_name'    => $request->last_name,
             'email'        => $request->email,
             'organisation' => $request->organisation,
+            'phone_number' => $request->phone_number,
+            'job_title'    => $request->job_title,
             'password'     => Hash::make(Str::random(32)),
         ]);
 
