@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserOnboardingController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::put('/user/password', [UserPasswordController::class, 'update']);
+
+    // Standard User updating their own profile
+    Route::put('/profile', [ProfileController::class, 'update']);
 
     // TODO: Update when permissions/roles comes into play
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
