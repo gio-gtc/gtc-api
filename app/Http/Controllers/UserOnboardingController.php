@@ -21,7 +21,7 @@ class UserOnboardingController extends Controller
             'last_name'    => 'required|string|max:255',
             // The 'unique:users' rule automatically blocks duplicates!
             'email'        => 'required|email|unique:users,email', 
-            'organisation' => 'required|string|max:255',
+            'organisation' => 'nullable|string|max:255',
             'phone_number' => 'nullable|string|max:50',
             'job_title'    => 'nullable|string|max:255',
         ]);
