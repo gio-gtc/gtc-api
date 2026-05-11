@@ -25,12 +25,23 @@ class ProfileController extends Controller
             'department'      => 'nullable|string|max:255',
         ]);
 
-        $user->update($request->only([
-            'first_name', 'last_name', 'email', 'organisation_id', 'phone_number', 'job_title', 'department'
-        ]));
+        $dataToUpdate = $request->only([
+            'first_name', 'last_name', 'organisation_id', 'phone_number', 'job_title', 'department'
+        ]);
+
+        $message = 'Profile updated successfully.';
+
+        if ($request->email !== $user->email) {
+            $dataToUpdate['pending_email'] = $request->email;
+            $message = 'Profile updated. Please check your new inbox to verify your updated email address.';
+            
+            // TODO: We will trigger the email notification here in Phase 2
+        }
+
+        $user->update($dataToUpdate);
 
         return response()->json([
-            'message' => 'Profile updated successfully.',
+            'message' => $message,
             'user'    => $user
         ]);
     }

@@ -22,7 +22,8 @@ use App\Notifications\FrontendPasswordResetNotification;
     'phone_number',
     'notes',
     'avatar', 
-    'email', 
+    'email',
+    'pending_email',
     'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
