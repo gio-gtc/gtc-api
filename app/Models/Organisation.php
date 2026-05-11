@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable([
     'name', 'billing_address', 'city', 'state', 'zip', 'country_id', 
     'discount_rate', 'credit_limit', 'pay_email', 'rec_email', 'copy_email', 
-    'telephone', 'fax_number', 'bank_account_number', 'routing_number', 
+    'phone_number', 'fax_number', 'bank_account_number', 'routing_number', 
     'rec_name', 'rec_tel'
 ])]
 class Organisation extends Model

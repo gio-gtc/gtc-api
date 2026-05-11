@@ -26,7 +26,7 @@ return new class extends Migration
             $table->string('pay_email')->nullable();
             $table->string('rec_email')->nullable();
             $table->string('copy_email')->nullable();
-            $table->string('telephone')->nullable();
+            $table->string('phone_number')->nullable();
             $table->string('fax_number')->nullable();
             
             // These will be encrypted by the Model, but they need to be 
