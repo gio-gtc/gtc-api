@@ -44,6 +44,8 @@ class DatabaseSeeder extends Seeder
             [
                 'first_name' => 'Gio',
                 'last_name' => 'A',
+                'organisation_id' => 1,
+                'phone_number' => fake()->phoneNumber(),
                 'password' => Hash::make('SuperPassword!'),
             ]
         );
