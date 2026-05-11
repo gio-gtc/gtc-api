@@ -22,10 +22,11 @@ class ProfileController extends Controller
             'organisation_id' => 'nullable|integer',
             'phone_number' => 'nullable|string|max:50',
             'job_title'    => 'nullable|string|max:255',
+            'department'      => 'nullable|string|max:255',
         ]);
 
         $user->update($request->only([
-            'first_name', 'last_name', 'email', 'organisation_id', 'phone_number', 'job_title'
+            'first_name', 'last_name', 'email', 'organisation_id', 'phone_number', 'job_title', 'department'
         ]));
 
         return response()->json([

@@ -35,6 +35,7 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'phone_number' => fake()->phoneNumber(),
             'job_title' => fake()->jobTitle(),
+            'department' => fake()->randomElement(['Sales', 'Marketing', 'Engineering', 'HR', 'Finance', 'Operations']),
         ];
     }
 

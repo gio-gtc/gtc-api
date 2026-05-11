@@ -20,7 +20,8 @@ class ProfileUpdateTest extends TestCase
             'first_name' => 'Updated',
             'last_name' => 'Name',
             'email' => $user->email, // Keeping the same email
-            // 'organisation_id' => 1,
+            'department'      => 'Engineering',
+            'organisation_id' => 1,
         ]);
 
         $response->assertOk();
@@ -30,7 +31,8 @@ class ProfileUpdateTest extends TestCase
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
             'first_name' => 'Updated',
-            // 'organisation_id' => 1,
+            'organisation_id' => 1,
+            'department'      => 'Engineering',
         ]);
     }
 
