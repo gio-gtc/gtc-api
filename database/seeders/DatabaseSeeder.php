@@ -52,5 +52,7 @@ class DatabaseSeeder extends Seeder
         if (!$adminUser->hasRole('Super Admin')) {
             $adminUser->assignRole($adminRole);
         }
+
+        User::factory(25)->create();
     }
 }
