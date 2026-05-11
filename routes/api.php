@@ -21,6 +21,8 @@ Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 Route::get('/validate-reset-token', [PasswordResetController::class, 'validateToken']);
 Route::post('/request-access', [AccessRequestController::class, 'store']);
 Route::post('/users/set-password', [UserOnboardingController::class, 'setPassword']);
+Route::get('/profile/verify-email/{user}', [\App\Http\Controllers\ProfileController::class, 'verifyPendingEmail'])
+    ->name('profile.verify-email');
 
 /*
 |--------------------------------------------------------------------------

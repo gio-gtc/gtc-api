@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\VerifyPendingEmail;
 
 class ProfileController extends Controller
 {
@@ -35,7 +39,13 @@ class ProfileController extends Controller
             $dataToUpdate['pending_email'] = $request->email;
             $message = 'Profile updated. Please check your new inbox to verify your updated email address.';
             
-            // TODO: We will trigger the email notification here in Phase 2
+            $verifyUrl = URL::temporarySignedRoute(
+                'profile.verify-email',
+                now()->addMinutes(60), // Expires in 1 hour
+                ['user' => $user->id]
+            );
+
+            Mail::to($request->email)->send(new VerifyPendingEmail($verifyUrl));
         }
 
         $user->update($dataToUpdate);
@@ -44,5 +54,30 @@ class ProfileController extends Controller
             'message' => $message,
             'user'    => $user
         ]);
+    }
+
+    /**
+     * Handle the secure link clicked from the user's email inbox.
+     */
+    public function verifyPendingEmail(Request $request, User $user)
+    {
+        // 1. Check if the URL was tampered with or expired
+        if (! $request->hasValidSignature()) {
+            // In a real app, you might redirect to a dedicated frontend error page
+            return response()->json(['message' => 'Invalid or expired verification link.'], 403);
+        }
+
+        // 2. If they have a pending email, officially swap it!
+        if ($user->pending_email) {
+            $user->update([
+                'email'         => $user->pending_email,
+                'pending_email' => null,
+            ]);
+        }
+
+        // 3. Redirect them back to the React Proxy so they can see success
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:8000'); 
+        
+        return redirect($frontendUrl . '/settings?email_verified=true');
     }
 }
