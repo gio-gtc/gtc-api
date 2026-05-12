@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
 class UserPasswordController extends Controller
@@ -13,17 +14,18 @@ class UserPasswordController extends Controller
      */
     public function update(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'current_password' => ['required', 'current_password'],
-            'password' => ['required', Password::defaults(), 'confirmed'],
+        $request->validate([
+            'current_password' => ['required', 'current_password'], 
+            
+            'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
         $request->user()->update([
-            'password' => $validated['password'],
+            'password' => Hash::make($request->password),
         ]);
 
         return response()->json([
-            'message' => 'Password updated successfully.',
+            'message' => 'Password updated successfully.'
         ]);
     }
 }

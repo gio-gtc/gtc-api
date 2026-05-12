@@ -42,10 +42,9 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
 
-    Route::put('/user/password', [UserPasswordController::class, 'update']);
-
     // Standard User updating their own profile
     Route::put('/profile', [ProfileController::class, 'update']);
+    Route::put('/password', [UserPasswordController::class, 'update']);
 
     // TODO: Update when permissions/roles comes into play
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
