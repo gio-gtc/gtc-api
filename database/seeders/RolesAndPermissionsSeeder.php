@@ -35,7 +35,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'GTC - Worklist',
             'GTC - View Billing',
             'Print Control Center',
-            'GTC - Items into production after shipped'
+            'GTC - Items into production after shipped',
+            'GTC - View My Tasks'
         ];
 
         foreach ($permissions as $permission) {
@@ -51,11 +52,30 @@ class RolesAndPermissionsSeeder extends Seeder
             'GTC - Manage Contacts', 
             'GTC - Manage Clients/Suppliers',
             'GTC - Manage Orders',
-            'GTC - GTC Force Administration'
+            'GTC - GTC Force Administration',
+            'GTC - View My Tasks'
         ]);
 
-        Role::firstOrCreate(['name' => 'Supervisor']);
-        Role::firstOrCreate(['name' => 'Designer']);
-        Role::firstOrCreate(['name' => 'Client']);
+        $supervisorRole = Role::firstOrCreate(['name' => 'Supervisor']);
+        $supervisorRole->givePermissionTo([
+            'GTC - Manage Contacts', 
+            'GTC - Manage Clients/Suppliers',
+            'GTC - Manage Orders',
+            'GTC - GTC Force Administration',
+            'GTC - View My Tasks'
+        ]);
+        
+        $designerRole = Role::firstOrCreate(['name' => 'Designer']);
+        $designerRole->givePermissionTo([
+            'GTC - View My Tasks'
+        ]);
+
+        $clientRole = Role::firstOrCreate(['name' => 'Client']);
+        $clientRole->givePermissionTo([
+            'Client - Place Order',
+            'Client - Add Client Contact',
+            'Client - Approve Material',
+            'Client - View Billing',
+        ]);
     }
 }
