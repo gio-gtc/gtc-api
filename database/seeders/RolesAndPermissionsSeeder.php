@@ -46,12 +46,16 @@ class RolesAndPermissionsSeeder extends Seeder
         Role::firstOrCreate(['name' => 'Super Admin']);
 
         // Create Admin and assign specific permissions
-        $adminRole = Role::firstOrCreate(['name' => 'admin']);
+        $adminRole = Role::firstOrCreate(['name' => 'Admin']);
         $adminRole->givePermissionTo([
             'GTC - Manage Contacts', 
             'GTC - Manage Clients/Suppliers',
             'GTC - Manage Orders',
             'GTC - GTC Force Administration'
         ]);
+
+        Role::firstOrCreate(['name' => 'Supervisor']);
+        Role::firstOrCreate(['name' => 'Designer']);
+        Role::firstOrCreate(['name' => 'Client']);
     }
 }

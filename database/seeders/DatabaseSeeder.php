@@ -32,13 +32,38 @@ class DatabaseSeeder extends Seeder
 
         // 3. Create dummy users for testing
         $standardAdmin = User::factory()->create([
-            'email' => 'test@gtc.co',
+            'email' => 'gio@adm.in',
             'first_name' => 'Test',
             'last_name' => 'Admin',
         ]);
         $standardAdmin->assignRole('Admin');
 
-        // And create 24 regular users with no roles yet
-        User::factory(24)->create();
+        $standardSupervisor = User::factory()->create([
+            'email' => 'gio@supervis.or',
+            'first_name' => 'Test',
+            'last_name' => 'Supervisor',
+        ]);
+        $standardSupervisor->assignRole('Supervisor');
+
+        $standardDesigner = User::factory()->create([
+            'email' => 'gio@design.er',
+            'first_name' => 'Test',
+            'last_name' => 'Designer',
+        ]);
+        $standardDesigner->assignRole('Designer');
+
+        $standardClient = User::factory()->create([
+            'email' => 'gio@clie.nt',
+            'first_name' => 'Test',
+            'last_name' => 'Client',
+        ]);
+        $standardClient->assignRole('Client');
+
+        $dummyUsers = User::factory(25)->create();
+
+        $dummyUsers->each(function ($user) {
+            $randomRole = fake()->randomElement(['Designer', 'Client']);            
+            $user->assignRole($randomRole);
+        });
     }
 }

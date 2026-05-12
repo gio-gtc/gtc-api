@@ -66,6 +66,8 @@ class PasswordResetController extends Controller
      */
     public function validateToken(Request $request): JsonResponse
     {
+        /** @var \Illuminate\Auth\Passwords\PasswordBroker $broker */
+        $broker = Password::broker();
         $request->validate([
             'email' => 'required|email',
             'token' => 'required'
@@ -74,7 +76,7 @@ class PasswordResetController extends Controller
         $user = User::where('email', $request->email)->first();
 
         // Check if the user exists AND if the token is valid
-        if (!$user || !Password::broker()->tokenExists($user, $request->token)) {
+        if (!$user || !$broker()->tokenExists($user, $request->token)) {
             return response()->json(['message' => 'Invalid or expired token.'], 400);
         }
 
