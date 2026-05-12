@@ -30,7 +30,7 @@ class VerifyPendingEmail extends Mailable
     {
         // Using a raw markdown template so we don't have to build complex HTML right now
         return new Content(
-            markdown: 'mail.verify-pending-email',
+            markdown: 'emails.verify-pending-email',
             with: [
                 'url' => $this->verificationUrl,
             ]
