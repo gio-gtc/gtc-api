@@ -27,11 +27,10 @@ class UserFactory extends Factory
         return [
             'first_name' => fake()->firstName(),
             'last_name' => fake()->lastName(),
-            // Todo: Add connection to organisation
-            // 'organisation' => fake()->company(), 
+            'organisation_id' => fake()->numberBetween(1, 10), 
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
+            'password' => static::$password ??= Hash::make('GTCRocks!'),
             'remember_token' => Str::random(10),
             'phone_number' => fake()->phoneNumber(),
             'job_title' => fake()->jobTitle(),

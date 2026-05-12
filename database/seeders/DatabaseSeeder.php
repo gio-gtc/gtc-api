@@ -4,41 +4,16 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Clear cached roles/permissions (Good practice when seeding)
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        // 1. Run your new Roles and Permissions Seeder first!
+        $this->call(RolesAndPermissionsSeeder::class);
 
-        // 2. Define the core permissions your dashboard will use to hide/show UI
-        // TODO: This is just example permissions. Edit for actual app needs.
-        $permissions = [
-            'view dashboard',
-            'manage tours',
-            'manage venues',
-            'manage users',
-            'edit media'
-        ];
-
-        foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission]);
-        }
-
-        // 3. Create Roles and assign permissions
-        $adminRole = Role::firstOrCreate(['name' => 'Super Admin']);
-        // Super Admins get everything
-        $adminRole->givePermissionTo(Permission::all());
-
-        $editorRole = Role::firstOrCreate(['name' => 'Editor']);
-        // Editors get a restricted subset
-        $editorRole->givePermissionTo(['manage tours', 'edit media', 'manage users', 'manage venues',]);
-
-        // 4. Create your Master Admin User
+        // 2. Create your specific Super Admin User
         $adminUser = User::firstOrCreate(
             ['email' => 'gio@gtc.co'],
             [
@@ -50,11 +25,20 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 5. Assign the Super Admin role to your user
+        // Assign the Super Admin role to yourself
         if (!$adminUser->hasRole('Super Admin')) {
-            $adminUser->assignRole($adminRole);
+            $adminUser->assignRole('Super Admin');
         }
 
-        User::factory(25)->create();
+        // 3. Create dummy users for testing
+        $standardAdmin = User::factory()->create([
+            'email' => 'test@gtc.co',
+            'first_name' => 'Test',
+            'last_name' => 'Admin',
+        ]);
+        $standardAdmin->assignRole('Admin');
+
+        // And create 24 regular users with no roles yet
+        User::factory(24)->create();
     }
 }
