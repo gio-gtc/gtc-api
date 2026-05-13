@@ -6,6 +6,7 @@ use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserOnboardingController;
+use App\Http\Controllers\RoleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -46,7 +47,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::put('/password', [UserPasswordController::class, 'update']);
 
-    // TODO: Update when permissions/roles comes into play
+    // Returns Roles
+    Route::get('/roles', [RoleController::class, 'index']);
+
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
 
     // In the future, your protected endpoints will go here:
