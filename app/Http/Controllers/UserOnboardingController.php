@@ -26,6 +26,7 @@ class UserOnboardingController extends Controller
             'phone_number' => 'nullable|string|max:50',
             'job_title'    => 'nullable|string|max:255',
             'role'         => 'required|string|exists:roles,name',
+            'department' => 'nullable|string|max:255'
         ]);
 
         // Create the user with a secure, random dummy password and NO verification timestamp
@@ -37,6 +38,7 @@ class UserOnboardingController extends Controller
             'phone_number' => $request->phone_number,
             'job_title'    => $request->job_title,
             'password'     => Hash::make(Str::random(32)),
+            'department' => $request->department
         ]);
 
         $user->assignRole($validated['role']);
