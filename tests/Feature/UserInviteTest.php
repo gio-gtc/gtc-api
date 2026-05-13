@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Mail\UserInvitedMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 
 // TODO: Add organisation connection organisation_id
 class UserInviteTest extends TestCase
@@ -15,6 +16,8 @@ class UserInviteTest extends TestCase
 
     public function test_unauthenticated_users_cannot_invite_new_users()
     {
+        Role::create(['name' => 'Client']);
+
         $response = $this->postJson('/api/users/invite', [
             'first_name' => 'Hacker',
             'last_name' => 'Man',
@@ -61,6 +64,7 @@ class UserInviteTest extends TestCase
     public function test_an_admin_can_successfully_invite_a_new_user_and_trigger_an_email()
     {
         Mail::fake();
+        Role::create(['name' => 'Client']);
 
         $this->loginAsUser();
 
@@ -71,6 +75,7 @@ class UserInviteTest extends TestCase
             // 'organisation' => null,
             'phone_number' => '555-1234',
             'job_title' => 'Director',
+            'role' => 'Client'
         ];
 
         $response = $this->postJson('/api/users/invite', $payload);

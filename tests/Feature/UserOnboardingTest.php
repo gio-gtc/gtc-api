@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
+use Spatie\Permission\Models\Role;
 
 class UserOnboardingTest extends TestCase
 {
@@ -17,6 +18,7 @@ class UserOnboardingTest extends TestCase
     public function test_admin_can_invite_new_user_and_email_is_sent()
     {
         Mail::fake();
+        Role::create(['name' => 'Client']);
 
         /** @var \App\Models\User $admin */
         $admin = User::factory()->create();
@@ -25,7 +27,8 @@ class UserOnboardingTest extends TestCase
             'first_name' => 'John',
             'last_name' => 'Doe',
             'email' => 'john@example.com',
-            'organisation' => 'GTC Force',
+            // 'organisation' => 'GTC Force',
+            'role' => 'Client'
         ];
 
         // 👉 Use actingAs() to simulate the logged-in admin

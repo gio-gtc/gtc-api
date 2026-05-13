@@ -16,14 +16,16 @@ class UserOnboardingController extends Controller
     // 1. Admin creates the user
     public function invite(Request $request): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'first_name'   => 'required|string|max:255',
             'last_name'    => 'required|string|max:255',
-            // The 'unique:users' rule automatically blocks duplicates!
             'email'        => 'required|email|unique:users,email', 
-            'organisation' => 'nullable|string|max:255',
+            // TODO: This line will be added back when org table is ready
+            // 'organisation_id' => 'nullable|integer|exists:organisations,id',
+            'organisation_id' => 'nullable|integer',
             'phone_number' => 'nullable|string|max:50',
             'job_title'    => 'nullable|string|max:255',
+            'role'         => 'required|string|exists:roles,name',
         ]);
 
         // Create the user with a secure, random dummy password and NO verification timestamp
@@ -31,11 +33,13 @@ class UserOnboardingController extends Controller
             'first_name'   => $request->first_name,
             'last_name'    => $request->last_name,
             'email'        => $request->email,
-            'organisation' => $request->organisation,
+            'organisation_id' => $request->organisation_id,
             'phone_number' => $request->phone_number,
             'job_title'    => $request->job_title,
             'password'     => Hash::make(Str::random(32)),
         ]);
+
+        $user->assignRole($validated['role']);
 
         /** @var \Illuminate\Auth\Passwords\PasswordBroker $broker */
         $broker = Password::broker();
