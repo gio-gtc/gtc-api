@@ -3,13 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\Organisation;
+use App\Models\OrganisationType;
 use Illuminate\Database\Seeder;
 
 class OrganisationSeeder extends Seeder
 {
     public function run(): void
     {
-        $org = Organisation::create([
+        $gtc = Organisation::create([
             'name' => 'Global Tour Creatives',
             'billing_address' => '123 Fake Street',
             'city' => 'Somewhere',
@@ -27,18 +28,12 @@ class OrganisationSeeder extends Seeder
             ]
         ]);
 
-        $org->types()->attach([1]);
+        $gtc->types()->attach([1]);
         
-        $acme = Organisation::create([
-            'name' => 'Acme Corp',
-            'billing_address' => '456 Desert Road',
-            'city' => 'Phoenix',
-            'state' => 'AZ',
-            'zip' => '85001',
-            'country_id' => 1,
-            'currency_id' => 1,
-        ]);
-        
-        $acme->types()->attach([2, 6]);
+        // TODO: Production Remove
+        Organisation::factory(9)->create()->each(function ($org) {
+            $randomTypes = OrganisationType::inRandomOrder()->take(rand(1, 2))->pluck('id');
+            $org->types()->attach($randomTypes);
+        });
     }
 }

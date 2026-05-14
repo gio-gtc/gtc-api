@@ -64,8 +64,8 @@ class DatabaseSeeder extends Seeder
         ]);
         $standardClient->assignRole('Client');
 
+        // TODO: Production Remove
         $dummyUsers = User::factory(25)->create();
-
         $dummyUsers->each(function ($user) {
             $randomRole = fake()->randomElement(['Designer', 'Client']);            
             $user->assignRole($randomRole);
