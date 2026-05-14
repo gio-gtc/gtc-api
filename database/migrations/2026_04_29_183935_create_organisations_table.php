@@ -11,6 +11,7 @@ return new class extends Migration
             $table->id();
             
             $table->string('name'); // Required
+            $table->unsignedBigInteger('organisation_type_id')->nullable();
             $table->string('billing_address')->nullable();
             $table->string('city')->nullable();
             $table->string('state')->nullable();
@@ -18,10 +19,14 @@ return new class extends Migration
             
             // Assuming you will have a 'countries' table later.
             $table->unsignedBigInteger('country_id')->nullable();
+
+            // Currency ID (links to countries table)
+            $table->unsignedBigInteger('currency_id')->nullable();
             
             // decimal('column_name', total_digits, decimal_places)
             $table->decimal('discount_rate', 5, 2)->default(0); 
-            $table->decimal('credit_limit', 12, 2)->nullable(); 
+            $table->decimal('credit_limit', 12, 2)->nullable();
+            $table->string('credit_terms')->nullable();
             
             $table->string('pay_email')->nullable();
             $table->string('rec_email')->nullable();

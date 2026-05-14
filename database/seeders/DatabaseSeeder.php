@@ -10,8 +10,12 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Run your new Roles and Permissions Seeder first!
-        $this->call(RolesAndPermissionsSeeder::class);
+        // 1. Run your new Seeder first!
+        $this->call([
+            RolesAndPermissionsSeeder::class,
+            OrganisationTypeSeeder::class,
+            CountrySeeder::class
+        ]);
 
         // 2. Create your specific Super Admin User
         $adminUser = User::firstOrCreate(
