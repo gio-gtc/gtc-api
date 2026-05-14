@@ -19,8 +19,8 @@ return new class extends Migration
             // Assuming you will have a 'countries' table later.
             $table->unsignedBigInteger('country_id')->nullable();
 
-            // Currency ID (links to countries table)
-            $table->unsignedBigInteger('currency_id')->nullable();
+            // Currency Code
+            $table->string('currency_code', 3)->nullable();
             
             // decimal('column_name', total_digits, decimal_places)
             $table->decimal('discount_rate', 5, 2)->default(0); 

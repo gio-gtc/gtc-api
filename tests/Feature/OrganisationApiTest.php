@@ -6,6 +6,7 @@ use App\Models\Organisation;
 use App\Models\OrganisationType;
 use App\Models\User;
 use Database\Seeders\OrganisationTypeSeeder;
+use Database\Seeders\CountrySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -28,13 +29,17 @@ class OrganisationApiTest extends TestCase
 
     public function test_can_fetch_organisation_types(): void
     {
-        $response = $this->actingAs($this->user)->getJson('/api/organisation-types');
+        $response = $this->actingAs($this->user)->getJson('/api/reference-data');
 
         // Verify it returns 200 and contains your real seeded static types
         $response->assertStatus(200)
-                 ->assertJsonFragment(['name' => 'Advertising Agency'])
-                 ->assertJsonFragment(['name' => 'Promoter'])
-                 ->assertJsonFragment(['name' => 'Graphic Designer']);
+            ->assertJsonStructure([
+                'org_types',
+            ])
+            ->assertJsonFragment(['name' => 'Advertising Agency']) 
+            ->assertJsonFragment(['name' => 'Advertising Agency'])
+            ->assertJsonFragment(['name' => 'Promoter'])
+            ->assertJsonFragment(['name' => 'Graphic Designer']);
     }
 
     public function test_can_create_organisation_with_types_and_emails(): void
@@ -126,5 +131,24 @@ class OrganisationApiTest extends TestCase
         $this->assertDatabaseMissing('organisations', [
             'id' => $organisation->id
         ]);
+    }
+
+    public function test_can_fetch_reference_data(): void
+    {
+        // Seed the countries so we have currency codes to test
+        $this->seed(CountrySeeder::class);
+
+        $response = $this->actingAs($this->user)->getJson('/api/reference-data');
+
+        // Verify it returns 200 and matches your new exact structure
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'org_types',
+                'countries',
+                'currency_codes'
+            ])
+            ->assertJsonFragment(['name' => 'Advertising Agency']) 
+            ->assertJsonFragment(['name' => 'United States', 'currency_code' => 'USD']) 
+            ->assertJsonFragment(['USD']); 
     }
 }

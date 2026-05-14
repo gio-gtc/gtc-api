@@ -9,6 +9,7 @@ use App\Http\Controllers\UserOnboardingController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\OrganisationController;
 use App\Models\OrganisationType;
+use App\Models\Country;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -52,8 +53,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/roles', [RoleController::class, 'index']);
 
     Route::apiResource('organisations', OrganisationController::class);
-    Route::get('/organisation-types', function () {
-        return response()->json(['types' => OrganisationType::all()]);
+    Route::get('/reference-data', function () {
+        return response()->json([
+            'org_types' => OrganisationType::all(),
+            'countries' => Country::all(),
+            // Extracts a unique, alphabetical list of currency codes (['AUD', 'CAD', 'EUR', 'GBP', 'USD', ...])
+            'currency_codes' => Country::select('currency_code')
+                                    ->distinct()
+                                    ->whereNotNull('currency_code')
+                                    ->orderBy('currency_code')
+                                    ->pluck('currency_code') 
+        ]);
     });
 
     // In the future, your protected endpoints will go here:

@@ -12,7 +12,7 @@ class Organisation extends Model
 
     protected $fillable = [
         'name', 'billing_address', 'city', 'state', 'zip', 'country_id', 
-        'currency_id', 'discount_rate', 'credit_limit', 'credit_terms', 
+        'currency_code', 'discount_rate', 'credit_limit', 'credit_terms', 
         'accounts_payable_contact', 'accounts_payable_emails', 
         'pay_email', 'rec_email', 'copy_email', 
         'phone_number', 'fax_number', 'bank_account_number', 'routing_number', 

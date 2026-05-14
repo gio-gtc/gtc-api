@@ -19,7 +19,7 @@ class OrganisationSeeder extends Seeder
             'country_id' => 1,
             'credit_limit' => 10000,
             'credit_terms' => '3 days',
-            'currency_id' => 1,
+            'currency_code' => "USD",
             'accounts_payable_contact' => 'billing@gtc.co',
             'accounts_payable_emails' => [
                 'billing@gtc.co',

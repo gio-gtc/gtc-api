@@ -108,7 +108,7 @@ class OrganisationController extends Controller
             'state' => 'nullable|string|max:255',
             'zip' => 'nullable|string|max:20',
             'country_id' => 'nullable|exists:countries,id',
-            'currency_id' => 'nullable|exists:countries,id',
+            'currency_code' => 'nullable|string|size:3',
             'discount_rate' => 'nullable|numeric|min:0|max:100',
             'credit_limit' => 'nullable|numeric|min:0',
             'credit_terms' => 'nullable|string|max:255',

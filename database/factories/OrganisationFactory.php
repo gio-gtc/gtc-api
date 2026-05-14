@@ -26,7 +26,7 @@ class OrganisationFactory extends Factory
             'country_id' => fake()->numberBetween(1, 50),
             'credit_limit' => fake()->randomFloat(2, 5000, 100000), // $5k to $100k
             'credit_terms' => fake()->randomElement(['Net 15', 'Net 30', 'Net 60', 'Due on Receipt']),
-            'currency_id' => fake()->numberBetween(1, 50),
+            'currency_code' => fake()->currencyCode(),
             
             'accounts_payable_contact' => fake()->name(),
             // Generate an array of 2 random emails for the AP department
