@@ -11,7 +11,6 @@ return new class extends Migration
             $table->id();
             
             $table->string('name'); // Required
-            $table->unsignedBigInteger('organisation_type_id')->nullable();
             $table->string('billing_address')->nullable();
             $table->string('city')->nullable();
             $table->string('state')->nullable();
@@ -27,6 +26,9 @@ return new class extends Migration
             $table->decimal('discount_rate', 5, 2)->default(0); 
             $table->decimal('credit_limit', 12, 2)->nullable();
             $table->string('credit_terms')->nullable();
+
+            $table->string('accounts_payable_contact')->nullable();
+            $table->json('accounts_payable_emails')->nullable();
             
             $table->string('pay_email')->nullable();
             $table->string('rec_email')->nullable();

@@ -2,33 +2,29 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-#[Fillable([
-    'name', 'organisation_type_id', 'billing_address', 'city', 'state', 'zip', 'country_id', 
-    'currency_id', 'discount_rate', 'credit_limit', 'credit_terms', 'pay_email', 'rec_email', 'copy_email', 
-    'phone_number', 'fax_number', 'bank_account_number', 'routing_number', 
-    'rec_name', 'rec_tel'
-])]
 class Organisation extends Model
 {
     use HasFactory;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    protected $fillable = [
+        'name', 'billing_address', 'city', 'state', 'zip', 'country_id', 
+        'currency_id', 'discount_rate', 'credit_limit', 'credit_terms', 
+        'accounts_payable_contact', 'accounts_payable_emails', 
+        'pay_email', 'rec_email', 'copy_email', 
+        'phone_number', 'fax_number', 'bank_account_number', 'routing_number', 
+        'rec_name', 'rec_tel'
+    ];
+
     protected function casts(): array
     {
         return [
-            // Automatically encrypt/decrypt these values in the database
+            'accounts_payable_emails' => 'array',
             'bank_account_number' => 'encrypted',
             'routing_number' => 'encrypted',
-            
-            // Ensure these always come out as floats (numbers) in your JSON API
             'discount_rate' => 'float',
             'credit_limit' => 'float',
         ];
@@ -42,5 +38,10 @@ class Organisation extends Model
     public function country()
     {
         return $this->belongsTo(Country::class);
+    }
+
+    public function types(): BelongsToMany
+    {
+        return $this->belongsToMany(OrganisationType::class, 'organisations_otypes');
     }
 }

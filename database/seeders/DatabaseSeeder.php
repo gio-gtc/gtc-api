@@ -14,7 +14,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolesAndPermissionsSeeder::class,
             OrganisationTypeSeeder::class,
-            CountrySeeder::class
+            CountrySeeder::class,
+            OrganisationSeeder::class
         ]);
 
         // 2. Create your specific Super Admin User
