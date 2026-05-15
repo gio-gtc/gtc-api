@@ -12,6 +12,7 @@ use App\Models\OrganisationType;
 use App\Models\Country;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Spatie\Permission\Models\Role;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,19 +51,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::put('/password', [UserPasswordController::class, 'update']);
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
-    Route::get('/roles', [RoleController::class, 'index']);
 
     Route::apiResource('organisations', OrganisationController::class);
     Route::get('/reference-data', function () {
         return response()->json([
             'org_types' => OrganisationType::all(),
             'countries' => Country::all(),
-            // Extracts a unique, alphabetical list of currency codes (['AUD', 'CAD', 'EUR', 'GBP', 'USD', ...])
             'currency_codes' => Country::select('currency_code')
                                     ->distinct()
                                     ->whereNotNull('currency_code')
                                     ->orderBy('currency_code')
-                                    ->pluck('currency_code') 
+                                    ->pluck('currency_code'),
+            'roles' => Role::pluck('name')
         ]);
     });
 
