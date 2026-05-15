@@ -116,4 +116,59 @@ class OrganisationApiTest extends TestCase
             'id' => $organisation->id
         ]);
     }
+
+    public function test_can_fetch_all_organisations_with_relationships(): void
+    {
+        // 1. Create a dummy organisation
+        $organisation = Organisation::factory()->create([
+            'name' => 'Heavyweight Corp'
+        ]);
+        
+        // Ensure it has a type attached so we can test the relationship
+        $type = \App\Models\OrganisationType::first(); // Assuming seeder ran in setUp
+        if ($type) {
+            $organisation->types()->attach($type->id);
+        }
+
+        // 2. Hit the standard index route
+        $response = $this->actingAs($this->user)->getJson('/api/organisations');
+
+        // 3. Verify it returns the full payload with relationships
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'organisations' => [
+                    '*' => [
+                        'id', 
+                        'name', 
+                        'country', // Must have country object
+                        'types'    // Must have types array
+                    ]
+                ]
+            ])
+            ->assertJsonFragment(['name' => 'Heavyweight Corp']);
+    }
+
+    public function test_can_search_organisations_for_typeahead(): void
+    {
+        // 1. Create specific dummy data to test the search filter
+        Organisation::factory()->create(['name' => 'Global Tour Creatives']);
+        Organisation::factory()->create(['name' => 'Global Dynamics']);
+        Organisation::factory()->create(['name' => 'Acme Corp']); // Should not be found
+
+        // 2. Hit the index route with the search parameter
+        $response = $this->actingAs($this->user)->getJson('/api/organisations?search=Global');
+
+        // 3. Verify it ONLY returns the matching results
+        $response->assertStatus(200)
+            ->assertJsonFragment(['name' => 'Global Tour Creatives'])
+            ->assertJsonFragment(['name' => 'Global Dynamics'])
+            ->assertJsonMissing(['name' => 'Acme Corp']); // Acme is successfully filtered out
+
+        // 4. Verify the payload is lightweight (no relationships loaded)
+        $firstResult = $response->json('organisations.0');
+        $this->assertArrayHasKey('id', $firstResult);
+        $this->assertArrayHasKey('name', $firstResult);
+        $this->assertArrayNotHasKey('country', $firstResult); // Should NOT have the country relationship
+        $this->assertArrayNotHasKey('types', $firstResult);   // Should NOT have the types relationship
+    }
 }

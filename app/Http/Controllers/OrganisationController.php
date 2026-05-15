@@ -11,11 +11,23 @@ class OrganisationController extends Controller
     /**
      * Display a listing of the organisations.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        // Fetch all organisations and eager-load their types and country
-        $organisations = Organisation::with(['types', 'country'])->get();
-        
+        $query = Organisation::query();
+
+        // SCENARIO A: The Typeahead Dropdown is searching
+        if ($request->filled('search')) {
+            $organisations = $query->where('name', 'like', '%' . $request->search . '%')
+                ->select('id', 'name')
+                ->limit(10)
+                ->get();
+
+            return response()->json(['organisations' => $organisations]);
+        }
+
+        // SCENARIO B: The Main Datatable is loading
+        $organisations = $query->with(['types', 'country'])->get();
+
         return response()->json(['organisations' => $organisations]);
     }
 
