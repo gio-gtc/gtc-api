@@ -35,12 +35,10 @@ Route::get('/profile/verify-email/{user}', [\App\Http\Controllers\ProfileControl
 | These routes require a valid Sanctum token passed in the Authorization header.
 */
 Route::middleware('auth:sanctum')->group(function () {
-
-    // A simple route to test if our token and session are working
     Route::get('/me', function (Request $request) {
         return response()->json([
             'message' => 'Token is valid!',
-            'user' => $request->user(),
+            'user' => $request->user()->load('organisation:id,name'),
             'roles' => $request->user()->getRoleNames(),
             'permissions' => $request->user()->getAllPermissions()->pluck('name'),
         ]);
@@ -57,10 +55,10 @@ Route::middleware('auth:sanctum')->group(function () {
             'org_types' => OrganisationType::all(),
             'countries' => Country::all(),
             'currency_codes' => Country::select('currency_code')
-                                    ->distinct()
-                                    ->whereNotNull('currency_code')
-                                    ->orderBy('currency_code')
-                                    ->pluck('currency_code'),
+                ->distinct()
+                ->whereNotNull('currency_code')
+                ->orderBy('currency_code')
+                ->pluck('currency_code'),
             'roles' => Role::where('name', '!=', 'Super Admin')->pluck('name')
         ]);
     });

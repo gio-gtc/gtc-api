@@ -34,7 +34,10 @@ class AuthController extends Controller
             'access_token' => $token,
             'user' => [
                 'id' => $user->id,
-                'organisation_id' => $user->organisation_id,
+                'organisation' => $user->organisation ? [
+                    'id' => $user->organisation->id,
+                    'name' => $user->organisation->name,
+                ] : null,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
                 'job_title' => $user->job_title,
