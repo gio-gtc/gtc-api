@@ -6,7 +6,6 @@ use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserOnboardingController;
-use App\Http\Controllers\RoleController;
 use App\Http\Controllers\OrganisationController;
 use App\Models\OrganisationType;
 use App\Models\Country;
@@ -62,7 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
                                     ->whereNotNull('currency_code')
                                     ->orderBy('currency_code')
                                     ->pluck('currency_code'),
-            'roles' => Role::pluck('name')
+            'roles' => Role::where('name', '!=', 'Super Admin')->pluck('name')
         ]);
     });
 
