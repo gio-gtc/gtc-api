@@ -171,4 +171,32 @@ class OrganisationApiTest extends TestCase
         $this->assertArrayNotHasKey('country', $firstResult); // Should NOT have the country relationship
         $this->assertArrayNotHasKey('types', $firstResult);   // Should NOT have the types relationship
     }
+    
+    public function test_can_create_organisation_with_multiple_types(): void
+    {
+        // 1. Assuming your setUp handles seeding types 1 and 2
+        $type1 = \App\Models\OrganisationType::find(1);
+        $type2 = \App\Models\OrganisationType::find(2);
+
+        $payload = [
+            'name' => 'Multi-Type Agency',
+            'types' => [$type1->id, $type2->id],
+            'currency_code' => 'USD',
+        ];
+
+        // 2. Hit the live endpoint
+        $response = $this->actingAs($this->user)->postJson('/api/organisations', $payload);
+
+        $response->assertStatus(201);
+        
+        $this->assertDatabaseHas('organisations_otypes', [
+            'organisation_id' => $response->json('organisation.id'),
+            'organisation_type_id' => $type1->id
+        ]);
+        
+        $this->assertDatabaseHas('organisations_otypes', [
+            'organisation_id' => $response->json('organisation.id'),
+            'organisation_type_id' => $type2->id
+        ]);
+    }
 }

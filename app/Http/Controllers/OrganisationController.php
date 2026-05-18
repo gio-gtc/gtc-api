@@ -44,10 +44,7 @@ class OrganisationController extends Controller
 
         $organisation = Organisation::create($validated);
 
-        // Attach the types to the pivot table
-        if (!empty($types)) {
-            $organisation->types()->attach($types);
-        }
+        $organisation->types()->sync($types);
 
         // Load the relationships to return complete data to React
         $organisation->load(['types', 'country']);
@@ -112,7 +109,7 @@ class OrganisationController extends Controller
             'name' => 'required|string|max:255',
             
             // Validate the array of type IDs
-            'types' => 'nullable|array',
+            'types' => 'required|array',
             'types.*' => 'exists:organisation_types,id',
 
             'billing_address' => 'nullable|string|max:255',
