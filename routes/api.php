@@ -7,6 +7,7 @@ use App\Http\Controllers\AccessRequestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserOnboardingController;
 use App\Http\Controllers\OrganisationController;
+use App\Http\Controllers\TourController;
 use App\Models\OrganisationType;
 use App\Models\Country;
 use Illuminate\Http\Request;
@@ -50,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
 
     Route::apiResource('organisations', OrganisationController::class);
+    Route::post('/tours', [TourController::class, 'store'])->name('tours.store');
     Route::get('/reference-data', function () {
         return response()->json([
             'org_types' => OrganisationType::all(),
