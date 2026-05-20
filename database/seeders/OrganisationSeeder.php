@@ -31,7 +31,7 @@ class OrganisationSeeder extends Seeder
         $gtc->types()->attach([1]);
         
         // TODO: Production Remove
-        Organisation::factory(9)->create()->each(function ($org) {
+        Organisation::factory(4)->create()->each(function ($org) {
             $randomTypes = OrganisationType::inRandomOrder()->take(rand(1, 2))->pluck('id');
             $org->types()->attach($randomTypes);
         });
