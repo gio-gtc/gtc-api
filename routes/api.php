@@ -8,6 +8,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserOnboardingController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\TourController;
+use App\Http\Controllers\UserController;
+use App\Models\Department;
 use App\Models\OrganisationType;
 use App\Models\Country;
 use Illuminate\Http\Request;
@@ -49,6 +51,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::put('/password', [UserPasswordController::class, 'update']);
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/departments', function () {
+        return response()->json(['departments' => Department::all()]);
+    });
 
     Route::apiResource('organisations', OrganisationController::class);
     Route::post('/tours', [TourController::class, 'store'])->name('tours.store');

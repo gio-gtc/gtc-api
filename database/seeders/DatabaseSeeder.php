@@ -15,7 +15,8 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             OrganisationTypeSeeder::class,
             CountrySeeder::class,
-            OrganisationSeeder::class
+            OrganisationSeeder::class,
+            DepartmentSeeder::class
         ]);
 
         // 2. Create your specific Super Admin User
