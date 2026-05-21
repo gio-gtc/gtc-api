@@ -31,9 +31,20 @@ class OrganisationSeeder extends Seeder
         $gtc->types()->attach([1]);
         
         // TODO: Production Remove
-        Organisation::factory(4)->create()->each(function ($org) {
-            $randomTypes = OrganisationType::inRandomOrder()->take(rand(1, 2))->pluck('id');
+        $organisations = Organisation::factory(4)->create();
+
+        $organisations->each(function ($org) {
+            $randomTypes = OrganisationType::where('id', '!=', 3) // 💡 Skip type 3 for now
+                ->inRandomOrder()
+                ->take(rand(1, 2))
+                ->pluck('id');
+                
             $org->types()->attach($randomTypes);
+        });
+
+        // Pick exactly 2 random organisations from the collection and attach type 3
+        $organisations->random(2)->each(function ($org) {
+            $org->types()->attach(3);
         });
     }
 }
