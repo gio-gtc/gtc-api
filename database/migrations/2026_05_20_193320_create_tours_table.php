@@ -19,7 +19,7 @@ return new class extends Migration
             
             // Foreign Keys (pointing to users and departments with restrictive deletion)
             $table->foreignId('gtc_rep_id')->constrained('users')->restrictOnDelete();
-            $table->foreignId('voice_over_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('voice_over_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->foreignId('department_id')->constrained('departments')->restrictOnDelete();
 
             // Booleans defaulting to false

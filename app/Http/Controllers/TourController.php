@@ -21,7 +21,7 @@ class TourController extends Controller
             
             // Foreign keys must exist in their respective tables
             'gtc_rep_id' => 'required|exists:users,id',
-            'voice_over_id' => 'required|exists:users,id',
+            'voice_over_id' => 'nullable|exists:users,id',
             'department_id' => 'required|exists:departments,id',
             
             // Booleans
