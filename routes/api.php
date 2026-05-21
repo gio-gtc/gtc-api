@@ -9,6 +9,7 @@ use App\Http\Controllers\UserOnboardingController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\TourController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\VenueController;
 use App\Models\Department;
 use App\Models\OrganisationType;
 use App\Models\Country;
@@ -58,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('organisations', OrganisationController::class);
     Route::post('/tours', [TourController::class, 'store'])->name('tours.store');
+    Route::get('/venues', [VenueController::class, 'index'])->name('venues.index');
     Route::get('/reference-data', function () {
         return response()->json([
             'org_types' => OrganisationType::all(),

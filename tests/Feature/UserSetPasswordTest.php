@@ -14,7 +14,6 @@ class UserSetPasswordTest extends TestCase
     {
         $user = User::factory()->create(['email' => 'newuser@example.com']);
         
-        // Dynamically resolve the broker to avoid static analysis interface errors
         $token = app('auth.password.broker')->createToken($user);
 
         $response = $this->postJson('/api/users/set-password', [
@@ -39,7 +38,6 @@ class UserSetPasswordTest extends TestCase
             'password_confirmation' => 'SuperSecret123!',
         ]);
 
-        // 👇 Changed to expect the 400 Bad Request your API throws!
         $response->assertStatus(400);
     }
 }
