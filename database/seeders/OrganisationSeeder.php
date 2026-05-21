@@ -43,7 +43,7 @@ class OrganisationSeeder extends Seeder
         });
 
         // Pick exactly 2 random organisations from the collection and attach type 3
-        $organisations->random(2)->each(function ($org) {
+        $organisations->random(1)->each(function ($org) {
             $org->types()->attach(3);
         });
     }

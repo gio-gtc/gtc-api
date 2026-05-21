@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Tour;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -65,11 +66,13 @@ class DatabaseSeeder extends Seeder
         ]);
         $standardClient->assignRole('Client');
 
-        // TODO: Production Remove
+        // TODO: Production remove everything below this line 👇
         $dummyUsers = User::factory(25)->create();
         $dummyUsers->each(function ($user) {
             $randomRole = fake()->randomElement(['Designer', 'Client']);            
             $user->assignRole($randomRole);
         });
+
+        Tour::factory(20)->create();
     }
 }
