@@ -14,7 +14,7 @@ class Order extends Model
     protected $fillable = [
         'tour_id',
         'venue_id',
-        'owner_id',
+        'ordered_by_id',
         'status',
         'local_deliverable_email',
         'due_date',
@@ -30,9 +30,9 @@ class Order extends Model
         return $this->belongsTo(Venue::class);
     }
 
-    public function owner(): BelongsTo
+    public function ordered_by(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'owner_id');
+        return $this->belongsTo(User::class, 'ordered_by_id');
     }
 
     public function showDates(): HasMany

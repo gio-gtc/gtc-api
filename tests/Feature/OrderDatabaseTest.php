@@ -25,7 +25,7 @@ class OrderDatabaseTest extends TestCase
         $order = Order::create([
             'tour_id' => $tour->id,
             'venue_id' => $venue->id,
-            'owner_id' => $user->id,
+            'ordered_by_id' => $user->id,
             'due_date' => '2026-07-01',
         ]);
 

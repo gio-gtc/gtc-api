@@ -11,7 +11,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('tour_id')->constrained('tours')->cascadeOnDelete();
             $table->foreignId('venue_id')->constrained('venues')->restrictOnDelete();
-            $table->foreignId('owner_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('ordered_by_id')->constrained('users')->restrictOnDelete();
             
             // Defaulting status directly in DB matching your rule
             $table->string('status')->default('New Order'); 
