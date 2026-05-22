@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             OrganisationSeeder::class,
             DepartmentSeeder::class,
             VenueSeeder::class,
+            MenuCatalogSeeder::class,
         ]);
 
         // 2. Create your specific Super Admin User
@@ -84,6 +85,9 @@ class DatabaseSeeder extends Seeder
                     'show_date' => now()->addDays(rand(1, 30))->format('Y-m-d'),
                 ]);
             }
+
+
+            \App\Models\OrderItem::factory(2)->create(['order_id' => $order->id]);
         });
     }
 }
