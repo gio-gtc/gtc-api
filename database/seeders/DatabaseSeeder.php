@@ -75,5 +75,15 @@ class DatabaseSeeder extends Seeder
         });
 
         Tour::factory(20)->create();
+
+        \App\Models\Order::factory(10)->create()->each(function ($order) {
+            // Give each random order a 1 to 3 night run automatically
+            for ($i = 0; $i < rand(1, 3); $i++) {
+                \App\Models\OrderShowDate::create([
+                    'order_id' => $order->id,
+                    'show_date' => now()->addDays(rand(1, 30))->format('Y-m-d'),
+                ]);
+            }
+        });
     }
 }
