@@ -12,7 +12,11 @@ class OrderMenuCategory extends Model
 
     protected $table = 'order_menu_categories';
     public $timestamps = false;
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'required_tags'];
+
+    protected $casts = [
+        'required_tags' => 'array'
+    ];
 
     public function orderMenuItems(): HasMany
     {

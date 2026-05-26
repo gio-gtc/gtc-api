@@ -38,11 +38,9 @@ class OrderItemFactory extends Factory
                 $singularKey = rtrim($key, 's'); 
                 
                 if (is_array($optionsArray) && count($optionsArray) > 0) {
-                    // 20% Chance: Simulate a user typing a custom override format manually
                     if ($this->faker->boolean(20)) {
                         $randomSpecs[$singularKey] = 'Custom ' . $this->faker->word() . ' ' . strtoupper($this->faker->lexify('???-##'));
                     } else {
-                        // 80% Chance: Pull cleanly from the standard blueprint options array
                         $randomSpecs[$singularKey] = Arr::random($optionsArray);
                     }
                 }
@@ -54,7 +52,6 @@ class OrderItemFactory extends Factory
             'order_menu_item_id' => $menuItem->id,
             'price_locked'       => $menuItem->default_price,
             'status'             => $assignedStatus,
-            'awaiting_assets'    => $awaiting, // Saved directly as a clean, queryable JSON block
             'due_date'           => now()->addWeeks(2)->format('Y-m-d'), // Locked exactly 2 weeks out
             'specifications'     => $randomSpecs,
         ];

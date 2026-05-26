@@ -15,6 +15,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Broadcast & Streaming Video Details',
                     'price' => 1200.00,
+                    'tags' => ['Audio', 'Voice Over'],
                     'blueprint' => [
                         'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
                         'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of', 'Superless', 'Sample'],
@@ -29,6 +30,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Social Platform Video Details',
                     'price' => 350.00,
+                    'tags' => ['Audio', 'Voice Over'],
                     'blueprint' => [
                         'types' => ['Social - 16:9', 'FB/IG Story', 'TikTok', 'Social Square', 'Social - 4:5'],
                         'cuts' => ['Pre Sale', 'On Sale Now', 'Evergreen', 'Sign Up Now'],
@@ -43,6 +45,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Radio Details',
                     'price' => 300.00,
+                    'tags' => ['Voice Over'],
                     'blueprint' => [
                         'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
                         'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of'],
@@ -56,6 +59,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Key Art & Static Assets Details',
                     'price' => 800.00,
+                    'tags' => ['Art'],
                     'blueprint' => [
                         'types' => ['Key Art Package', 'Socials & Web Banners', 'International Key art & Social Package']
                     ]
@@ -64,20 +68,25 @@ class MenuCatalogSeeder extends Seeder
         ];
 
         foreach ($formCatalog as $categoryName => $items) {
-    $category = OrderMenuCategory::firstOrCreate(['name' => $categoryName]);
+            $categoryTags = $items[0]['tags'] ?? [];
 
-    foreach ($items as $item) {
-        OrderMenuItem::updateOrCreate(
-            [
-                'order_menu_category_id' => $category->id,
-                'name'                   => $item['name']
-            ],
-            [
-                'default_price'          => $item['price'],
-                'form_blueprint'         => $item['blueprint']
-            ]
-        );
-    }
-}
+            $category = OrderMenuCategory::updateOrCreate(
+                ['name' => $categoryName],
+                ['required_tags' => $categoryTags]
+            );
+
+            foreach ($items as $item) {
+                OrderMenuItem::updateOrCreate(
+                    [
+                        'order_menu_category_id' => $category->id,
+                        'name'                   => $item['name']
+                    ],
+                    [
+                        'default_price'          => $item['price'],
+                        'form_blueprint'         => $item['blueprint']
+                    ]
+                );
+            }
+        }
     }
 }

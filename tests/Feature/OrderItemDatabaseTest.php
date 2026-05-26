@@ -54,7 +54,7 @@ class OrderItemDatabaseTest extends TestCase
 
         // Assert
         $this->assertEquals(2, $orderItem->assignees()->count());
-        $this->assertDatabaseHas('order_item_user', [
+        $this->assertDatabaseHas('order_item_assignee', [
             'order_item_id' => $orderItem->id,
             'user_id' => $user1->id
         ]);

@@ -14,7 +14,7 @@ class OrderController extends Controller
      */
     public function index(): JsonResponse
     {
-        $orders = Order::with(['venue', 'tour', 'orderItems.orderMenuItem'])
+        $orders = Order::with(['venue', 'tour', 'orderItems.orderMenuItem.category'])
             ->orderBy('created_at', 'desc')
             ->get();
 

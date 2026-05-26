@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('order_menu_categories', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique(); // e.g., Audio, Social Video
+            $table->json('required_tags')->nullable();
         });
     }
 
