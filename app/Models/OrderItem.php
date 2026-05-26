@@ -12,12 +12,12 @@ class OrderItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'order_id', 'order_menu_item_id', 'price_locked', 
-        'status', 'due_date', 'asset_url', 'mime_type', 'specifications'
+        'order_id', 'order_menu_item_id', 'price_locked', 'status', 'awaiting_assets', 'specifications', 'due_date'
     ];
 
     protected $casts = [
-        'specifications' => 'array'
+        'specifications' => 'array',
+        'awaiting_assets' => 'array'
     ];
 
     public function order(): BelongsTo
@@ -33,6 +33,7 @@ class OrderItem extends Model
     // Many-to-Many connection mapping out team assignees
     public function assignees(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'order_item_user');
+        return $this->belongsToMany(User::class, 'order_item_assignee', 'order_item_id', 'user_id')
+            ->withTimestamps();
     }
 }

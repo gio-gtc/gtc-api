@@ -1,31 +1,62 @@
 <?php
-
 namespace Database\Factories;
 
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Arr;
 
 class OrderItemFactory extends Factory
 {
+    protected $model = OrderItem::class;
+
     public function definition(): array
     {
         $menuItem = OrderMenuItem::inRandomOrder()->first() ?? OrderMenuItem::factory()->create();
         
-        // Formulate dynamic JSON contents to test our flexible specifications engine
-        $specs = match($menuItem->menu_category_id) {
-            1 => ['cuts' => 'First Cut', 'duration' => 30, 'language' => 'English', 'encoding' => 'ProRes 422', 'isci' => 'VID' . $this->faker->randomNumber(5)],
-            2 => ['card_holder' => 'Amex', 'duration' => 15, 'language' => 'Spanish'],
-            default => ['dimensions' => '1080x1350', 'profile' => 'RGB']
-        };
+        // 1. Core Lifecycle Status Pool
+        $statuses = ['new order', 'in progress', 'client review', 'complete', 'canceled'];
+        $assignedStatus = Arr::random($statuses);
+
+        // 2. Conditional Blocker Logic
+        $awaiting = [];
+        if (in_array($assignedStatus, ['new order', 'in progress'])) {
+            // 40% chance this item is actually waiting on external content assets
+            if ($this->faker->boolean(40)) {
+                $possibleBlockers = ['Voice Over', 'Audio', 'Art'];
+                // Randomly assign one or more blockers to the list
+                shuffle($possibleBlockers);
+                $awaiting = array_slice($possibleBlockers, 0, rand(1, 3));
+            }
+        }
+
+        // 3. Dynamic Specifications Engine (with 20% user string input override)
+        $randomSpecs = [];
+        if (!empty($menuItem->form_blueprint)) {
+            foreach ($menuItem->form_blueprint as $key => $optionsArray) {
+                $singularKey = rtrim($key, 's'); 
+                
+                if (is_array($optionsArray) && count($optionsArray) > 0) {
+                    // 20% Chance: Simulate a user typing a custom override format manually
+                    if ($this->faker->boolean(20)) {
+                        $randomSpecs[$singularKey] = 'Custom ' . $this->faker->word() . ' ' . strtoupper($this->faker->lexify('???-##'));
+                    } else {
+                        // 80% Chance: Pull cleanly from the standard blueprint options array
+                        $randomSpecs[$singularKey] = Arr::random($optionsArray);
+                    }
+                }
+            }
+        }
 
         return [
-            'order_id' => Order::inRandomOrder()->first()?->id ?? Order::factory(),
+            'order_id'           => Order::inRandomOrder()->first()?->id ?? Order::factory(),
             'order_menu_item_id' => $menuItem->id,
-            'price_locked' => $menuItem->default_price,
-            'status' => $this->faker->randomElement(['New', 'In Production', 'Client Review', 'Complete']),
-            'due_date' => $this->faker->dateTimeBetween('now', '+2 weeks')->format('Y-m-d'),
-            'specifications' => $specs,
+            'price_locked'       => $menuItem->default_price,
+            'status'             => $assignedStatus,
+            'awaiting_assets'    => $awaiting, // Saved directly as a clean, queryable JSON block
+            'due_date'           => now()->addWeeks(2)->format('Y-m-d'), // Locked exactly 2 weeks out
+            'specifications'     => $randomSpecs,
         ];
     }
 }

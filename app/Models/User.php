@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +10,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use App\Notifications\FrontendPasswordResetNotification;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 #[Fillable([
     'organisation_id', 
@@ -55,7 +54,12 @@ class User extends Authenticatable
      */
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
     {
-        // This forces Laravel to use our custom notification pointing to gtc-laravel
         $this->notify(new FrontendPasswordResetNotification($token));
+    }
+
+    public function assignedOrderItems(): BelongsToMany
+    {
+        return $this->belongsToMany(OrderItem::class, 'order_item_assignee', 'user_id', 'order_item_id')
+            ->withTimestamps();
     }
 }
