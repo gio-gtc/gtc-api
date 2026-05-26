@@ -19,6 +19,7 @@ class OrderItemController extends Controller
             'order_menu_item_id' => 'required|exists:order_menu_items,id',
             'specifications'  => 'nullable|array',
             'assignee_ids'    => 'nullable|array',
+            'due_date'        => 'required|date|after_or_equal:today',
             'assignee_ids.*'  => 'exists:users,id',
         ]);
 

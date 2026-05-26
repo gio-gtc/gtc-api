@@ -4,12 +4,15 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserOnboardingController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\TourController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VenueController;
+use App\Http\Controllers\OrderMenuController;
 use App\Models\Department;
 use App\Models\OrganisationType;
 use App\Models\Country;
@@ -60,6 +63,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('organisations', OrganisationController::class);
     Route::post('/tours', [TourController::class, 'store'])->name('tours.store');
     Route::get('/venues', [VenueController::class, 'index'])->name('venues.index');
+    Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+    Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
+    Route::get('/order-catalog-menu', [OrderMenuController::class, 'index'])->name('order-catalog.index');
     Route::get('/reference-data', function () {
         return response()->json([
             'org_types' => OrganisationType::all(),
