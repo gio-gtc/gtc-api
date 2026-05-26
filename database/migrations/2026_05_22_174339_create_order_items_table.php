@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('order_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
-            $table->foreignId('menu_item_id')->constrained('menu_items')->restrictOnDelete();
+            $table->foreignId('order_menu_item_id')->constrained('order_menu_items')->restrictOnDelete();
             
             // Financial Lock Rule
             $table->decimal('price_locked', 10, 2); 

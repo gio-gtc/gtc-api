@@ -2,15 +2,15 @@
 
 namespace Database\Factories;
 
-use App\Models\MenuItem;
 use App\Models\Order;
+use App\Models\OrderMenuItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class OrderItemFactory extends Factory
 {
     public function definition(): array
     {
-        $menuItem = MenuItem::inRandomOrder()->first() ?? MenuItem::factory()->create();
+        $menuItem = OrderMenuItem::inRandomOrder()->first() ?? OrderMenuItem::factory()->create();
         
         // Formulate dynamic JSON contents to test our flexible specifications engine
         $specs = match($menuItem->menu_category_id) {
@@ -21,7 +21,7 @@ class OrderItemFactory extends Factory
 
         return [
             'order_id' => Order::inRandomOrder()->first()?->id ?? Order::factory(),
-            'menu_item_id' => $menuItem->id,
+            'order_menu_item_id' => $menuItem->id,
             'price_locked' => $menuItem->default_price,
             'status' => $this->faker->randomElement(['New', 'In Production', 'Client Review', 'Complete']),
             'due_date' => $this->faker->dateTimeBetween('now', '+2 weeks')->format('Y-m-d'),

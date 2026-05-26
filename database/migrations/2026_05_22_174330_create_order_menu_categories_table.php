@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('menu_categories', function (Blueprint $table) {
+        Schema::create('order_menu_categories', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique(); // e.g., Audio, Social Video
         });
@@ -16,6 +16,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('menu_categories');
+        Schema::dropIfExists('order_menu_categories');
     }
 };

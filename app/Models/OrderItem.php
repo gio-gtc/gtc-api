@@ -12,7 +12,7 @@ class OrderItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'order_id', 'menu_item_id', 'price_locked', 
+        'order_id', 'order_menu_item_id', 'price_locked', 
         'status', 'due_date', 'asset_url', 'mime_type', 'specifications'
     ];
 
@@ -27,7 +27,7 @@ class OrderItem extends Model
 
     public function menuItem(): BelongsTo
     {
-        return $this->belongsTo(MenuItem::class);
+        return $this->belongsTo(OrderMenuItem::class);
     }
 
     // Many-to-Many connection mapping out team assignees

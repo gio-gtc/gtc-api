@@ -2,12 +2,12 @@
 
 namespace Database\Factories;
 
-use App\Models\MenuCategory;
+use App\Models\OrderMenuCategory;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-class MenuCategoryFactory extends Factory
+class OrderMenuCategoryFactory extends Factory
 {
-    protected $model = MenuCategory::class;
+    protected $model = OrderMenuCategory::class;
 
     public function definition(): array
     {

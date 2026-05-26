@@ -74,6 +74,5 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // In the future, your protected endpoints will go here:
-    // Route::apiResource('tours', TourController::class);
     // Route::apiResource('venues', VenueController::class);
 });

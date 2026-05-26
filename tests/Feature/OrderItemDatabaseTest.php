@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\MenuCategory;
-use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderMenuCategory;
+use App\Models\OrderMenuItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -16,9 +16,9 @@ class OrderItemDatabaseTest extends TestCase
 
     public function test_an_order_item_can_safely_store_and_retrieve_json_specifications()
     {
-        $category = MenuCategory::create(['name' => 'Broadcast Video']);
-        $menuItem = MenuItem::create([
-            'menu_category_id' => $category->id,
+        $category = OrderMenuCategory::create(['name' => 'Broadcast Video']);
+        $menuItem = OrderMenuItem::create([
+            'order_menu_category_id' => $category->id,
             'name' => '30s Trailer',
             'default_price' => 500.00
         ]);
@@ -27,7 +27,7 @@ class OrderItemDatabaseTest extends TestCase
         // Act - Inject custom array properties into specs column
         $item = OrderItem::create([
             'order_id' => $order->id,
-            'menu_item_id' => $menuItem->id,
+            'order_menu_item_id' => $menuItem->id,
             'price_locked' => 500.00,
             'specifications' => [
                 'encoding' => 'ProRes 422',

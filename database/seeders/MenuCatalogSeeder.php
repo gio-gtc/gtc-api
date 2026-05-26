@@ -2,30 +2,82 @@
 
 namespace Database\Seeders;
 
-use App\Models\MenuCategory;
-use App\Models\MenuItem;
+use App\Models\OrderMenuCategory;
+use App\Models\OrderMenuItem;
 use Illuminate\Database\Seeder;
 
 class MenuCatalogSeeder extends Seeder
 {
     public function run(): void
     {
-        $catalog = [
-            'Broadcast & Streaming Video' => ['15s TV Commercial', '30s TV Commercial', '60s Cinema Trailer'],
-            'Social Video' => ['Instagram Story Asset', 'TikTok Promo Video', 'YouTube Pre-Roll Bump'],
-            'Audio' => ['Radio Single Commercial', 'Radio Dual Commercial', 'Spotify Audio Ad Loop'],
-            'Key Art' => ['Billboard Master Layout', 'Digital Poster Kit', 'Social Media Graphics Print Sheet']
+        $formCatalog = [
+            'Broadcast & Streaming Video' => [
+                [
+                    'name' => 'Broadcast & Streaming Video Details',
+                    'price' => 1200.00,
+                    'blueprint' => [
+                        'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
+                        'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of', 'Superless', 'Sample'],
+                        'durations' => [10, 15, 30],
+                        'languages' => ['English', 'Spanish', 'French'],
+                        'encodings' => ["H264-MP4 (Online or Venue)", "Station MP4 (Broadcast)", "Hulu", "Amazon", "Netflix", "Connect TV"]
+                    ]
+                ]
+            ],
+
+            'Social Video' => [
+                [
+                    'name' => 'Social Platform Video Details',
+                    'price' => 350.00,
+                    'blueprint' => [
+                        'types' => ['Social - 16:9', 'FB/IG Story', 'TikTok', 'Social Square', 'Social - 4:5'],
+                        'cuts' => ['Pre Sale', 'On Sale Now', 'Evergreen', 'Sign Up Now'],
+                        'card_holders' => ["Amex", "Citi"],
+                        'durations' => [10, 15, 30],
+                        'languages' => ['English', 'Spanish', 'French']
+                    ]
+                ]
+            ],
+
+            'Radio' => [
+                [
+                    'name' => 'Radio Details',
+                    'price' => 300.00,
+                    'blueprint' => [
+                        'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
+                        'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of'],
+                        'durations' => [15, 30, 60],
+                        'languages' => ['English', 'Spanish', 'French']
+                    ]
+                ]
+            ],
+
+            'Key Art & Static Assets' => [
+                [
+                    'name' => 'Key Art & Static Assets Details',
+                    'price' => 800.00,
+                    'blueprint' => [
+                        'types' => ['Key Art Package', 'Socials & Web Banners', 'International Key art & Social Package']
+                    ]
+                ]
+            ]
         ];
 
-        foreach ($catalog as $categoryName => $items) {
-            $category = MenuCategory::firstOrCreate(['name' => $categoryName]);
+        foreach ($formCatalog as $categoryName => $items) {
+    $category = OrderMenuCategory::firstOrCreate(['name' => $categoryName]);
 
-            foreach ($items as $itemName) {
-                MenuItem::firstOrCreate(
-                    ['name' => $itemName, 'menu_category_id' => $category->id],
-                    ['default_price' => rand(150, 2200) . '.00']
-                );
-            }
-        }
+    foreach ($items as $item) {
+        OrderMenuItem::updateOrCreate(
+            [
+                'order_menu_category_id' => $category->id,
+                'name'                   => $item['name']
+            ],
+            [
+                'default_price'          => $item['price'],
+                'form_blueprint'         => $item['blueprint']
+            ]
+        );
+    }
+}
     }
 }
