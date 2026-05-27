@@ -15,9 +15,14 @@ class Order extends Model
         'tour_id',
         'venue_id',
         'ordered_by_id',
-        'status',
+        'is_demo',
         'local_deliverable_email',
-        'due_date',
+        'status',
+        'due_date'
+    ];
+
+    protected $casts = [
+        'is_demo' => 'boolean',
     ];
 
     protected $appends = ['awaiting_assets'];
@@ -27,7 +32,9 @@ class Order extends Model
     }
 
     public function venue(): BelongsTo {
-        return $this->belongsTo(Venue::class);
+        return $this->belongsTo(Venue::class)->withDefault([
+            'name' => 'Demo Template' // Safe fallback for your React props
+        ]);
     }
 
     public function ordered_by(): BelongsTo {
@@ -57,5 +64,11 @@ class Order extends Model
 
         // Return a clean, unique list of active blockers
         return array_values(array_unique($awaiting));
+    }
+
+    public function client(): BelongsTo {
+        return $this->belongsTo(User::class, 'ordered_by_id')->withDefault([
+            'name' => ''
+        ]);
     }
 }

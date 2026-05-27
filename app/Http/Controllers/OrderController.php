@@ -14,7 +14,13 @@ class OrderController extends Controller
      */
     public function index(): JsonResponse
     {
-        $orders = Order::with(['venue', 'tour', 'orderItems.orderMenuItem.category'])
+        $orders = Order::with([
+            'venue',
+            'tour',
+            'client',
+            'orderItems.orderMenuItem.category',
+            'orderItems.assignees'
+        ])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -31,9 +37,11 @@ class OrderController extends Controller
         // 1. Validate the core project requirements
         $validated = $request->validate([
             'tour_id'                 => 'required|exists:tours,id',
-            'venue_id'                => 'required|exists:venues,id',
-            'due_date'                => 'required|date|after_or_equal:today',
-            'local_deliverable_email' => 'required|email',
+            'is_demo'                 => 'boolean',
+            'venue_id'                => 'required_unless:is_demo,true|nullable|exists:venues,id',
+            'ordered_by_id'           => 'required_unless:is_demo,true|nullable|exists:users,id',
+            'local_deliverable_email' => 'nullable|email',
+            'status'                  => 'string',
         ]);
 
         // 2. Create the parent record container
