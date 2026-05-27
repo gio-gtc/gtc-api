@@ -11,8 +11,12 @@ return new class extends Migration
         Schema::create('venues', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('city');
-            $table->string('state')->nullable(); // Nullable for international venues
+    
+            $table->string('street_address')->nullable();
+            $table->string('city')->nullable();
+            $table->string('state')->nullable();
+            $table->string('postal_code')->nullable();
+            $table->foreignId('country_id')->default(1)->constrained('countries')->cascadeOnDelete();
             $table->integer('capacity')->nullable();
             $table->timestamps();
         });

@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Venue;
+use App\Models\Country;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class VenueFactory extends Factory
@@ -11,13 +12,19 @@ class VenueFactory extends Factory
 
     public function definition(): array
     {
-        $venueSuffixes = ['Arena', 'Stadium', 'Amphitheatre', 'Center', 'Bowl', 'Hall'];
+        $usCountry = Country::where('code', 'US')->first();
+        $randomCountry = Country::inRandomOrder()->first();
+
+        $isDomestic = $this->faker->boolean(80);
+        $assignedCountry = ($isDomestic && $usCountry) ? $usCountry : ($randomCountry ?? Country::factory());
 
         return [
-            'name' => $this->faker->company() . ' ' . $this->faker->randomElement($venueSuffixes),
-            'city' => $this->faker->city(),
-            'state' => $this->faker->stateAbbr(),
-            'capacity' => $this->faker->optional(0.8)->numberBetween(5000, 80000), // 20% chance of being null
+            'name'           => $this->faker->company() . ' Arena',
+            'street_address' => $this->faker->streetAddress(),
+            'city'           => $this->faker->city(),
+            'state'          => $isDomestic ? $this->faker->stateAbbr() : $this->faker->state(),
+            'postal_code'    => $this->faker->postcode(),
+            'country_id'     => $assignedCountry->id,
         ];
     }
 }
