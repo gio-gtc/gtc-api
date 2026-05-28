@@ -53,7 +53,7 @@ class Order extends Model
         $awaiting = [];
 
         foreach ($this->orderItems as $item) {
-            if (in_array($item->status, ['new order', 'in progress'])) {
+            if (in_array($item->status, ['Still In Cart', 'Unassigned', 'Client Review'])) {
                 $categoryTags = $item->orderMenuItem?->category?->required_tags ?? [];
                 
                 foreach ($categoryTags as $tag) {

@@ -16,7 +16,7 @@ return new class extends Migration
             // Financial Lock Rule
             $table->decimal('price_locked', 10, 2); 
             
-            $table->string('status')->default('New Order');
+            $table->string('status')->nullable();
             $table->date('due_date')->nullable();
             $table->string('asset_url')->nullable();
             $table->string('mime_type')->nullable();
