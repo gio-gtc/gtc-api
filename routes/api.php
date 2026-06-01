@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\ProfileController;
@@ -56,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/password', [UserPasswordController::class, 'update']);
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
     Route::get('/departments', function () {
         return response()->json(['departments' => Department::all()]);
     });
@@ -80,7 +82,4 @@ Route::middleware('auth:sanctum')->group(function () {
             'roles' => Role::where('name', '!=', 'Super Admin')->pluck('name')
         ]);
     });
-
-    // In the future, your protected endpoints will go here:
-    // Route::apiResource('venues', VenueController::class);
 });
