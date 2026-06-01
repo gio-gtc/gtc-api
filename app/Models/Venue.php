@@ -10,11 +10,11 @@ class Venue extends Model
 {
     use HasFactory;
 
-    protected $appends = ['is_international'];
-
     protected $fillable = [
-        'name', 'street_address', 'city', 'state', 'postal_code', 'country_id', "capacity"
+        'name', 'street_address', 'city', 'state', 'postal_code', 'country_id', 'capacity'
     ];
+
+    protected $appends = ['is_international'];
 
     public function country(): BelongsTo
     {
@@ -23,6 +23,6 @@ class Venue extends Model
 
     public function getIsInternationalAttribute(): bool
     {
-        return $this->country?->iso_code !== 'US';
+        return $this->country ? $this->country->code !== 'US' : false;
     }
 }

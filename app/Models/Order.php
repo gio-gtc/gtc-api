@@ -71,4 +71,9 @@ class Order extends Model
             'name' => ''
         ]);
     }
+
+    public function setStatusAttribute($value)
+    {
+        $this->attributes['status'] = ucwords(strtolower($value));
+    }
 }

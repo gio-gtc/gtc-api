@@ -31,7 +31,7 @@ class OrderItemDatabaseTest extends TestCase
             'locked_price' => 500.00,
             'specifications' => [
                 'encoding' => 'ProRes 422',
-                'isci' => 'TEST1234'
+                'isci' => 'GTC000001'
             ]
         ]);
 
@@ -39,7 +39,7 @@ class OrderItemDatabaseTest extends TestCase
         $freshItem = OrderItem::find($item->id);
 
         $this->assertEquals('ProRes 422', $freshItem->specifications['encoding']);
-        $this->assertEquals('TEST1234', $freshItem->specifications['isci']);
+        $this->assertEquals('GTC000001', $freshItem->specifications['isci']);
         $this->assertIsArray($freshItem->specifications);
     }
 
