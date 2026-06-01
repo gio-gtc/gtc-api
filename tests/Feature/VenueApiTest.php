@@ -33,9 +33,18 @@ class VenueApiTest extends TestCase
 
         // Assert
         $response->assertOk();
+        
+        // Update the asserted keys to check for our lean payload + country relation columns
         $response->assertJsonStructure([
             'venues' => [
-                '*' => ['id', 'name', 'city', 'state', 'capacity', 'created_at', 'updated_at']
+                '*' => [
+                    'id', 
+                    'name', 
+                    'city', 
+                    'state', 
+                    'country_id',
+                    'country' => ['id', 'name']
+                ]
             ]
         ]);
 

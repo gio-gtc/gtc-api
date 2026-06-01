@@ -54,7 +54,7 @@ class OrderItemFactory extends Factory
         return [
             'order_id'           => $order->id,
             'order_menu_item_id' => $menuItem->id,
-            'price_locked'       => $menuItem->default_price,
+            'locked_price'       => $menuItem->default_price,
             'status'             => $finalStatus,
             'due_date'           => $finalDueDate,
             'specifications'     => $randomSpecs,

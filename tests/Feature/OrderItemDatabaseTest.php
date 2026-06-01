@@ -27,8 +27,8 @@ class OrderItemDatabaseTest extends TestCase
         // Act - Inject custom array properties into specs column
         $item = OrderItem::create([
             'order_id' => $order->id,
-            'order_menu_item_id' => $menuItem->id,
-            'price_locked' => 500.00,
+            'order_menu_item_id' => $menuItem->id,            
+            'locked_price' => 500.00,
             'specifications' => [
                 'encoding' => 'ProRes 422',
                 'isci' => 'TEST1234'

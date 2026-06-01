@@ -16,7 +16,15 @@ class VenueFactory extends Factory
         $randomCountry = Country::inRandomOrder()->first();
 
         $isDomestic = $this->faker->boolean(80);
-        $assignedCountry = ($isDomestic && $usCountry) ? $usCountry : ($randomCountry ?? Country::factory());
+        
+        $assignedCountry = ($isDomestic && $usCountry) ? $usCountry : ($randomCountry ?? Country::firstOrCreate(
+            ['code' => 'US'],
+            [
+                'name'          => 'United States',
+                'currency_code' => 'USD',
+                'dial_code'     => '+1'
+            ]
+        ));
 
         return [
             'name'           => $this->faker->company() . ' Arena',
