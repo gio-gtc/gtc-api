@@ -11,47 +11,40 @@ use Illuminate\Http\Request;
 class OrderItemController extends Controller
 {
     /**
-     * Add a creative deliverable item to an open order.
+     * Add a creative deliverable item to an open order cart.
      */
     public function store(Request $request, Order $order): JsonResponse
     {
         $validated = $request->validate([
             'order_menu_item_id' => 'required|exists:order_menu_items,id',
-            'specifications'  => 'nullable|array',
-            'assignee_ids'    => 'nullable|array',
-            'due_date'        => 'required|date|after_or_equal:today',
-            'assignee_ids.*'  => 'exists:users,id',
+            'specifications'     => 'nullable|array',
+            'assignee_ids'       => 'nullable|array',
+            'due_date'           => 'required|date|after_or_equal:today',
+            'assignee_ids.*'     => 'exists:users,id',
         ]);
 
-        $menuItem = OrderMenuItem::find($validated['order_menu_item_id']);
-        $tour = $order->tour;
+        $menuItem = OrderMenuItem::findOrFail($validated['order_menu_item_id']);
 
-        $priceLocked = match ($menuItem->name) {
-            'TV First Cut'             => $tour->tv_first_cut ?? $menuItem->default_price,
-            'TV Second Cut'             => $tour->tv_second_cut ?? $menuItem->default_price,
-            'Radio Single Commercial'       => $tour->radio_single_duration ?? $menuItem->default_price,
-            'Radio Dual Commercial'         => $tour->radio_dual_duration ?? $menuItem->default_price,
-            'Billboard Master Layout', 
-            'Digital Poster Kit'            => $tour->key_art ?? $menuItem->default_price,
-            default                         => $menuItem->default_price,
-        };
+        $lockedPrice = $menuItem->default_price;
 
+        // Create the initial line-item assignment block in cart status
         $orderItem = OrderItem::create([
-            'order_id'              => $order->id,
-            'order_menu_item_id'    => $menuItem->id,
-            'price_locked'          => $priceLocked,
-            'due_date'              => $validated['due_date'],
-            'specifications'        => $validated['specifications'] ?? [],
-            'status'                => 'New',
+            'order_id'           => $order->id,
+            'order_menu_item_id' => $menuItem->id,
+            'locked_price'       => $lockedPrice, // Aligned with the database column modification name
+            'due_date'           => $validated['due_date'],
+            'specifications'     => $validated['specifications'] ?? [],
+            'status'             => 'Still In Cart',
         ]);
 
         if (!empty($validated['assignee_ids'])) {
             $orderItem->assignees()->sync($validated['assignee_ids']);
         }
 
+        // Return wrapped response object structure
         return response()->json([
             'message' => 'Item added to order successfully.',
-            'item'    => $orderItem->load('assignees')
+            'data'    => $orderItem->load('assignees')
         ], 201);
     }
 }
