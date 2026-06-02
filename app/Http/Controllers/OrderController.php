@@ -193,4 +193,24 @@ class OrderController extends Controller
             ]
         ], 200);
     }
+
+    /**
+     * Display the specified parent order with complete nested relationship detail trees.
+     */
+    public function show(Order $order): JsonResponse
+    {
+        // Eager load everything needed to render a rich order details page
+        $order->load([
+            'venue',
+            'tour',
+            'client',
+            'showDates',
+            'orderItems.orderMenuItem.category',
+            'orderItems.assignees'
+        ]);
+
+        return response()->json([
+            'data' => $order
+        ], 200);
+    }
 }

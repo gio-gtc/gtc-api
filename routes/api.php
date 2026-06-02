@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/venues', [VenueController::class, 'index'])->name('venues.index');
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/submit', [OrderController::class, 'submit'])->name('orders.submit');
     Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
     Route::get('/order-catalog-menu', [OrderMenuController::class, 'index'])->name('order-catalog.index');
