@@ -11,18 +11,20 @@ class OrderItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'order_id',
-        'order_menu_item_id',
-        'order_item_status_id',
-        'locked_price',
-        'due_date',
-        'specifications',
-        'root_order_item_id',
-        'revision_number',
-        'supersedes_order_item_id',
-        'invoice_line_id'
-    ];
+    // protected $fillable = [
+    //     'order_id',
+    //     'order_menu_item_id',
+    //     'order_item_status_id',
+    //     'locked_price',
+    //     'due_date',
+    //     'specifications',
+    //     'root_order_item_id',
+    //     'revision_number',
+    //     'supersedes_order_item_id',
+    //     'invoice_line_id'
+    // ];
+
+    protected $guarded = [];
 
     protected $casts = [
         'specifications' => 'array',
