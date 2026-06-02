@@ -16,7 +16,6 @@ return new class extends Migration
             $table->foreignId('ordered_by_id')->nullable()->constrained('users')->nullOnDelete();
             $table->boolean('is_demo')->default(false); 
             $table->string('local_deliverable_email')->nullable();
-            $table->string('status')->default('New Order');
             $table->timestamp('submitted_at')->nullable();
             $table->date('due_date')->nullable();
             $table->timestamps();

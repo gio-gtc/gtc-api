@@ -14,10 +14,10 @@ class MockOrderSeeder extends Seeder
 {
     public function run(): void
     {
-        OrderItem::truncate();
-        OrderShowDate::truncate();
-        Order::truncate();
-        Tour::truncate();
+        OrderItem::query()->delete();
+        OrderShowDate::query()->delete();
+        Order::query()->delete();
+        Tour::query()->delete();
 
         // 1. Generate random dummy testing users
         $dummyUsers = User::factory(25)->create();

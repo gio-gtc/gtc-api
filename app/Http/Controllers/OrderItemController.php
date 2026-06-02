@@ -30,8 +30,8 @@ class OrderItemController extends Controller
         // 2. Instantiate the item utilizing the strict foreign lookup ID mapping key
         $item = $order->orderItems()->create([
             'order_menu_item_id'   => $menuItem->id,
-            'locked_price'         => $menuItem->default_price, // Lock current catalog price
-            'order_item_status_id' => $stillInCartStatus->id,   // 🚀 Applies the required NOT NULL ID
+            'locked_price'         => $menuItem->default_price,
+            'order_item_status_id' => $stillInCartStatus->id,
             'due_date'             => $validated['due_date'] ?? null,
             'specifications'       => $validated['specifications'] ?? [],
         ]);

@@ -20,7 +20,6 @@ class OrderFactory extends Factory
             'tour_id' => Tour::inRandomOrder()->first()?->id ?? Tour::factory(),
             'venue_id' => Venue::inRandomOrder()->first()?->id ?? Venue::factory(),
             'ordered_by_id' => User::inRandomOrder()->first()?->id ?? User::factory(),
-            'status' => $this->faker->randomElement($statuses),
             'local_deliverable_email' => $this->faker->optional(0.5)->safeEmail(),
             'due_date' => $this->faker->dateTimeBetween('+1 week', '+1 month')->format('Y-m-d'),
         ];

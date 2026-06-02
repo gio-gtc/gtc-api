@@ -49,7 +49,7 @@ class Order extends Model
      */
     public function statuses(): BelongsToMany
     {
-        return $this->belongsToMany(OrderStatus::class, 'order_status');
+        return $this->belongsToMany(OrderStatus::class);
     }
 
     /**

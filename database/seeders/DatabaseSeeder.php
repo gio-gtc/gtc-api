@@ -2,14 +2,29 @@
 
 namespace Database\Seeders;
 
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\OrderItemStatus;
+use App\Models\OrderShowDate;
+use App\Models\OrderStatus;
+use App\Models\Tour;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        DB::table('order_order_status')->delete(); 
+        OrderItem::query()->delete();
+        OrderShowDate::query()->delete();
+        Order::query()->delete();
+        Tour::query()->delete();
+        OrderItemStatus::query()->delete();
+        OrderStatus::query()->delete();
+        
         // 1. Run Core Production Data, Setup Engine Modules, and Status Dictionary
         $this->call([
             RolesAndPermissionsSeeder::class,

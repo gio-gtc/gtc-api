@@ -11,9 +11,9 @@ class OrderStatusSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('order_status')->truncate(); 
-        OrderItemStatus::truncate();
-        OrderStatus::truncate();
+        DB::table('order_order_status')->delete(); 
+        OrderItemStatus::query()->delete();
+        OrderStatus::query()->delete();
 
         // Initialize the master parent Order Status options
         $newOrder     = OrderStatus::create(['name' => 'New Order']);

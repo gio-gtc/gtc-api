@@ -41,7 +41,6 @@ class Tour extends Model
                 'ordered_by_id'           => null,
                 'is_demo'                 => true,
                 'local_deliverable_email' => '',
-                'status'                  => 'Demo'
             ]);
         });
     }
