@@ -16,19 +16,27 @@ class OrderController extends Controller
     /**
      * Display a listing of all parent orders with their core relationships.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $orders = Order::with([
+        $query = Order::with([
             'venue',
             'tour',
             'client',
-            'orderItems.orderMenuItem.category',
-            'orderItems.assignees'
-        ])
-            ->orderBy('created_at', 'desc')
-            ->get();
+            'statuses',
+            'orderItems.statusLookup'
+        ]);
 
-        // 🚀 UPDATED: Enforce the standard unified JSON response contract wrapping
+        // High-Performance Filter Check: Intercept explicit request string status updates
+        if ($request->has('status')) {
+            $filterStatusName = $request->query('status');
+            
+            $query->whereHas('statuses', function ($q) use ($filterStatusName) {
+                $q->where('name', $filterStatusName);
+            });
+        }
+
+        $orders = $query->orderBy('created_at', 'desc')->get();
+
         return response()->json([
             'data' => $orders
         ], 200);

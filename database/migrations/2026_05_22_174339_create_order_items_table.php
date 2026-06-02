@@ -10,30 +10,24 @@ return new class extends Migration
     {
         Schema::create('order_items', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
-            $table->foreignId('order_menu_item_id')->constrained('order_menu_items')->restrictOnDelete();
-            
-            // Renamed from price_locked to match system naming rules
-            $table->decimal('locked_price', 10, 2); 
-            
-            $table->string('status')->nullable();
+            $table->foreignId('order_id')->constrained()->onDelete('cascade');
+            $table->foreignId('order_menu_item_id')->constrained()->onDelete('cascade');
+            $table->unsignedBigInteger('order_item_status_id')->index();
+            $table->decimal('locked_price', 10, 2);
             $table->date('due_date')->nullable();
-            $table->string('asset_url')->nullable();
-            $table->string('mime_type')->nullable();
-            
-            // Revision Lineage Tracking Structure
+            $table->json('specifications')->nullable();
             $table->unsignedBigInteger('root_order_item_id')->nullable();
             $table->integer('revision_number')->default(1);
             $table->unsignedBigInteger('supersedes_order_item_id')->nullable();
-            $table->unsignedBigInteger('invoice_line_id')->nullable();
-            
-            $table->json('specifications')->nullable(); 
+            $table->unsignedBigInteger('invoice_line_id')->nullable()->index();
             $table->timestamps();
         });
-    }
 
-    public function down(): void
-    {
-        Schema::dropIfExists('order_items');
+        Schema::table('order_items', function (Blueprint $table) {
+            $table->foreign('order_item_status_id')
+                ->references('id')
+                ->on('order_item_statuses')
+                ->onDelete('restrict'); // Protects dictionary records from accidental deletion
+        });
     }
 };

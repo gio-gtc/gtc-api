@@ -1,9 +1,11 @@
 <?php
+
 namespace Database\Factories;
 
 use App\Models\OrderItem;
 use App\Models\Order;
 use App\Models\OrderMenuItem;
+use App\Models\OrderItemStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Arr;
 
@@ -13,17 +15,20 @@ class OrderItemFactory extends Factory
 
     public function definition(): array
     {
-        // 🚀 FIX: Establish the order right away so we can safely check if it's a demo
+        // Establish the order right away so we can safely check if it's a demo
         $order = Order::inRandomOrder()->first() ?? Order::factory()->create();
         $menuItem = OrderMenuItem::inRandomOrder()->first() ?? OrderMenuItem::factory()->create();
         
-        // 1. Core Lifecycle Status Pool (Updated to your real pipeline)
-        $statuses = ['Still In Cart', 'Unassigned', 'In Production', 'Client Review', 'Out For Delivery', 'Canceled'];
-        $assignedStatus = Arr::random($statuses);
+        // 1. Relational Status Lookup Engine
+        // Pulls a real status record from the dictionary table to preserve string checks
+        $statusRecord = OrderItemStatus::inRandomOrder()->first() 
+            ?? OrderItemStatus::create(['name' => 'Unassigned']);
+        
+        $assignedStatusName = $statusRecord->name;
 
-        // 2. Conditional Blocker Logic (Mapped to your new active production states)
+        // 2. Conditional Blocker Logic (Evaluates smoothly via the lookup table record name)
         $awaiting = [];
-        if (in_array($assignedStatus, ['Still In Cart', 'Unassigned', 'In Production'])) {
+        if (in_array($assignedStatusName, ['Still In Cart', 'Unassigned', 'In Production'])) {
             // 40% chance this item is actually waiting on external content assets
             if ($this->faker->boolean(40)) {
                 $possibleBlockers = ['Voice Over', 'Audio', 'Art'];
@@ -34,6 +39,10 @@ class OrderItemFactory extends Factory
 
         // 3. Dynamic Specifications Engine (Preserved exactly)
         $randomSpecs = [];
+        if (!empty($awaiting)) {
+            $randomSpecs['awaiting_assets'] = $awaiting;
+        }
+
         if (!empty($menuItem->form_blueprint)) {
             foreach ($menuItem->form_blueprint as $key => $optionsArray) {
                 $singularKey = rtrim($key, 's'); 
@@ -48,16 +57,18 @@ class OrderItemFactory extends Factory
             }
         }
 
-        $finalStatus = $order->is_demo ? null : $assignedStatus;
+        // 4. Conditional Demo Shell Values
+        // Maps to the relational foreign key integer index rather than raw text strings
+        $finalStatusId = $order->is_demo ? null : $statusRecord->id;
         $finalDueDate = $order->is_demo ? null : now()->addWeeks(2)->format('Y-m-d');
 
         return [
-            'order_id'           => $order->id,
-            'order_menu_item_id' => $menuItem->id,
-            'locked_price'       => $menuItem->default_price,
-            'status'             => $finalStatus,
-            'due_date'           => $finalDueDate,
-            'specifications'     => $randomSpecs,
+            'order_id'             => $order->id,
+            'order_menu_item_id'   => $menuItem->id,
+            'locked_price'         => $menuItem->default_price,
+            'order_item_status_id' => $finalStatusId,
+            'due_date'             => $finalDueDate,
+            'specifications'       => $randomSpecs,
         ];
     }
 }

@@ -6,74 +6,92 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Str;
 
 class Order extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'uuid',
         'tour_id',
         'venue_id',
         'ordered_by_id',
         'is_demo',
         'local_deliverable_email',
         'status',
+        'submitted_at',
         'due_date'
     ];
 
-    protected $casts = [
-        'is_demo' => 'boolean',
+    // Automatically inject these properties into all outgoing JSON serialization blocks
+    protected $appends = [
+        'is_awaiting_assets',
+        'item_statuses'
     ];
 
-    protected $appends = ['awaiting_assets'];
+    /**
+     * Boot logic to handle lifecycle event hooks.
+     */
+    protected static function booted()
+    {
+        // Automatically generate a secure UUID string whenever a new order is initialized
+        static::creating(function ($order) {
+            if (empty($order->uuid)) {
+                $order->uuid = (string) Str::uuid();
+            }
+        });
+    }
 
-    public function tour(): BelongsTo {
+    /**
+     * Maps the order container to the newly built custom 'order_status' pivot table
+     */
+    public function statuses(): BelongsToMany
+    {
+        return $this->belongsToMany(OrderStatus::class, 'order_status');
+    }
+
+    /**
+     * Header Icon Guard: Returns true if any active submitted items are missing assets.
+     */
+    public function getIsAwaitingAssetsAttribute(): bool
+    {
+        return $this->orderItems()
+            ->whereIn('status', ['Unassigned', 'In Production', 'Client Review'])
+            ->exists();
+    }
+
+    /**
+     * Header Badges: Returns a list of all unique Title Case statuses currently active in this order.
+     */
+    public function getItemStatusesAttribute(): array
+    {
+        return $this->statuses->pluck('name')->toArray();
+    }
+
+    public function tour(): BelongsTo
+    {
         return $this->belongsTo(Tour::class);
     }
 
-    public function venue(): BelongsTo {
-        return $this->belongsTo(Venue::class)->withDefault([
-            'name' => 'Demo Template' // Safe fallback for your React props
-        ]);
+    public function venue(): BelongsTo
+    {
+        return $this->belongsTo(Venue::class);
     }
 
-    public function ordered_by(): BelongsTo {
+    public function client(): BelongsTo
+    {
         return $this->belongsTo(User::class, 'ordered_by_id');
     }
 
-    public function showDates(): HasMany {
+    public function showDates(): HasMany
+    {
         return $this->hasMany(OrderShowDate::class);
     }
 
-    public function orderItems(): HasMany {
-        return $this->hasMany(OrderItem::class);
-    }
-
-    public function getAwaitingAssetsAttribute(): array {
-        $awaiting = [];
-
-        foreach ($this->orderItems as $item) {
-            if (in_array($item->status, ['Still In Cart', 'Unassigned', 'Client Review'])) {
-                $categoryTags = $item->orderMenuItem?->category?->required_tags ?? [];
-                
-                foreach ($categoryTags as $tag) {
-                    $awaiting[] = $tag;
-                }
-            }
-        }
-
-        // Return a clean, unique list of active blockers
-        return array_values(array_unique($awaiting));
-    }
-
-    public function client(): BelongsTo {
-        return $this->belongsTo(User::class, 'ordered_by_id')->withDefault([
-            'name' => ''
-        ]);
-    }
-
-    public function setStatusAttribute($value)
+    public function orderItems(): HasMany
     {
-        $this->attributes['status'] = ucwords(strtolower($value));
+        return $this->hasMany(OrderItem::class);
     }
 }

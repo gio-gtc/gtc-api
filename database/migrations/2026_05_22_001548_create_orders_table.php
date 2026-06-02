@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
+            $table->uuid('uuid')->unique();
             $table->foreignId('tour_id')->constrained('tours')->cascadeOnDelete();
             $table->foreignId('venue_id')->nullable()->constrained('venues')->nullOnDelete();
             $table->foreignId('ordered_by_id')->nullable()->constrained('users')->nullOnDelete();
