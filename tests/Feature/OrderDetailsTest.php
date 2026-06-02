@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\OrderMenuCategory;
 use App\Models\OrderMenuItem;
+use App\Models\OrderItemStatus;
 use App\Models\OrderShowDate;
 use App\Models\Organisation;
 use App\Models\Tour;
 use App\Models\User;
 use App\Models\Venue;
+use Database\Seeders\OrderStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -25,29 +27,32 @@ class OrderDetailsTest extends TestCase
     {
         parent::setUp();
 
-        // 1. Setup organizational boundaries
+        // 1. Seed our baseline dictionary matrix into the SQLite testing container memory
+        $this->seed(OrderStatusSeeder::class);
+
+        // 2. Setup organizational boundaries
         $organisation = Organisation::create(['name' => 'Interscope Records']);
         $this->user = User::factory()->create(['organisation_id' => $organisation->id]);
 
-        // 2. Setup master relational dependencies
+        // 3. Setup master relational dependencies
         $tour = Tour::factory()->create();
         $venue = Venue::factory()->create();
 
-        // 3. Create the parent order shell container
+        // 4. Create the parent order shell container
         $this->order = Order::create([
             'tour_id' => $tour->id,
             'venue_id' => $venue->id,
             'ordered_by_id' => $this->user->id,
-            'status' => 'New Order'
+            'is_demo' => false
         ]);
 
-        // 4. Attach a nested show date
+        // 5. Attach a nested show date
         OrderShowDate::create([
             'order_id' => $this->order->id,
             'show_date' => '2026-07-20'
         ]);
 
-        // 5. Populate catalog records and inject an active item into the container
+        // 6. Populate catalog records
         $category = OrderMenuCategory::create(['name' => 'Merchandise Design']);
         $menuItem = OrderMenuItem::create([
             'order_menu_category_id' => $category->id,
@@ -55,10 +60,14 @@ class OrderDetailsTest extends TestCase
             'default_price' => 250.00
         ]);
 
+        // 7. Look up the relational Unassigned record (Maps to parent "New Order")
+        $unassignedStatus = OrderItemStatus::where('name', 'Unassigned')->first();
+
+        // 8. Inject an active item into the container with its foreign key mapping
         $this->order->orderItems()->create([
-            'order_menu_item_id' => $menuItem->id,
-            'locked_price' => 250.00,
-            'status' => 'Still In Cart'
+            'order_menu_item_id'   => $menuItem->id,
+            'locked_price'         => 250.00,
+            'order_item_status_id' => $unassignedStatus->id,
         ]);
     }
 
@@ -86,9 +95,11 @@ class OrderDetailsTest extends TestCase
             ->assertJsonStructure([
                 'data' => [
                     'id',
+                    'uuid',
                     'tour_id',
                     'venue_id',
-                    'status',
+                    'is_awaiting_assets',
+                    'item_statuses',
                     'venue',
                     'tour',
                     'client',
@@ -99,6 +110,7 @@ class OrderDetailsTest extends TestCase
                         '*' => [
                             'id',
                             'order_id',
+                            'order_item_status_id',
                             'status',
                             'locked_price',
                             'order_menu_item' => [
@@ -114,7 +126,8 @@ class OrderDetailsTest extends TestCase
 
         // Assert exact properties inside data layer to ensure relationships match target rows
         $this->assertEquals($this->order->id, $response->json('data.id'));
-        $this->assertEquals('New Order', $response->json('data.status'));
+        $this->assertContains('New Order', $response->json('data.item_statuses'));
+        $this->assertEquals('Unassigned', $response->json('data.order_items.0.status'));
         $this->assertEquals('2026-07-20', $response->json('data.show_dates.0.show_date'));
         $this->assertEquals('Tour Hoodie Asset Blueprint', $response->json('data.order_items.0.order_menu_item.name'));
         $this->assertEquals('Merchandise Design', $response->json('data.order_items.0.order_menu_item.category.name'));

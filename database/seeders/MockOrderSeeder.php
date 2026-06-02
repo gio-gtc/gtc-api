@@ -9,19 +9,15 @@ use App\Models\OrderShowDate;
 use App\Models\Tour;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class MockOrderSeeder extends Seeder
 {
     public function run(): void
     {
-        // Wipe historical mock tables clean before recreating
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         OrderItem::truncate();
         OrderShowDate::truncate();
         Order::truncate();
         Tour::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         // 1. Generate random dummy testing users
         $dummyUsers = User::factory(25)->create();

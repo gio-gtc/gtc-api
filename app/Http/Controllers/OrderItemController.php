@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\OrderItem;
+use App\Models\OrderItemStatus;
 use App\Models\OrderMenuItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,36 +15,31 @@ class OrderItemController extends Controller
      */
     public function store(Request $request, Order $order): JsonResponse
     {
+        // 1. Validate incoming menu selection and parameters
         $validated = $request->validate([
             'order_menu_item_id' => 'required|exists:order_menu_items,id',
+            'due_date'           => 'nullable|date',
             'specifications'     => 'nullable|array',
-            'assignee_ids'       => 'nullable|array',
-            'due_date'           => 'required|date|after_or_equal:today',
-            'assignee_ids.*'     => 'exists:users,id',
         ]);
 
         $menuItem = OrderMenuItem::findOrFail($validated['order_menu_item_id']);
 
-        $lockedPrice = $menuItem->default_price;
+        // Dynamically find the default relational "Still In Cart" record row
+        $stillInCartStatus = OrderItemStatus::where('name', 'Still In Cart')->first();
 
-        // Create the initial line-item assignment block in cart status
-        $orderItem = OrderItem::create([
-            'order_id'           => $order->id,
-            'order_menu_item_id' => $menuItem->id,
-            'locked_price'       => $lockedPrice, // Aligned with the database column modification name
-            'due_date'           => $validated['due_date'],
-            'specifications'     => $validated['specifications'] ?? [],
-            'status'             => 'Still In Cart',
+        // 2. Instantiate the item utilizing the strict foreign lookup ID mapping key
+        $item = $order->orderItems()->create([
+            'order_menu_item_id'   => $menuItem->id,
+            'locked_price'         => $menuItem->default_price, // Lock current catalog price
+            'order_item_status_id' => $stillInCartStatus->id,   // 🚀 Applies the required NOT NULL ID
+            'due_date'             => $validated['due_date'] ?? null,
+            'specifications'       => $validated['specifications'] ?? [],
         ]);
 
-        if (!empty($validated['assignee_ids'])) {
-            $orderItem->assignees()->sync($validated['assignee_ids']);
-        }
-
-        // Return wrapped response object structure
+        // 3. Return payload wrapped natively inside your standard network envelope
         return response()->json([
-            'message' => 'Item added to order successfully.',
-            'data'    => $orderItem->load('assignees')
+            'message' => 'Line item successfully appended to cart.',
+            'data'    => $item
         ], 201);
     }
 }

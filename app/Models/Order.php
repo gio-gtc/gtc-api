@@ -57,9 +57,9 @@ class Order extends Model
      */
     public function getIsAwaitingAssetsAttribute(): bool
     {
-        return $this->orderItems()
-            ->whereIn('status', ['Unassigned', 'In Production', 'Client Review'])
-            ->exists();
+        return $this->orderItems->contains(function ($item) {
+            return in_array($item->status, ['Unassigned', 'In Production', 'Client Review']);
+        });
     }
 
     /**

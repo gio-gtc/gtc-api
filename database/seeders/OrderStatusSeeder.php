@@ -11,12 +11,9 @@ class OrderStatusSeeder extends Seeder
 {
     public function run(): void
     {
-        // Clear status tables before applying seeds to avoid constraint duplicates
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::table('order_status')->truncate(); 
         OrderItemStatus::truncate();
         OrderStatus::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         // Initialize the master parent Order Status options
         $newOrder     = OrderStatus::create(['name' => 'New Order']);

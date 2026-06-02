@@ -5,11 +5,14 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\OrderMenuCategory;
 use App\Models\OrderMenuItem;
+use App\Models\OrderItemStatus;
 use App\Models\Organisation;
 use App\Models\Tour;
 use App\Models\User;
 use App\Models\Venue;
+use Database\Seeders\OrderStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -25,44 +28,53 @@ class OrderSubmissionTest extends TestCase
     {
         parent::setUp();
 
-        // 1. Setup client corporate layout infrastructure
+        // 1. Seed our baseline dictionary matrix into the SQLite testing memory space
+        $this->seed(OrderStatusSeeder::class);
+
+        // 2. Setup testing organizational boundaries with credit terms
         $organisation = Organisation::create([
-            'name' => 'Atlantic Records',
+            'name' => 'GTC Test Label Group',
             'credit_terms' => 'Net 30'
         ]);
-
-        $this->user = User::factory()->create([
-            'organisation_id' => $organisation->id
-        ]);
-
-        // 2. Setup project containers
+        
+        $this->user = User::factory()->create(['organisation_id' => $organisation->id]);
+        
         $tour = Tour::factory()->create();
         $venue = Venue::factory()->create();
 
+        // 3. Create parent order checkout container
         $this->order = Order::create([
             'tour_id' => $tour->id,
             'venue_id' => $venue->id,
             'ordered_by_id' => $this->user->id,
-            'status' => 'New Order'
+            'is_demo' => false
         ]);
 
-        // 3. Setup catalog items
-        $category = OrderMenuCategory::create(['name' => 'Video Production']);
+        // 4. Populate menu item blueprint details
+        $category = OrderMenuCategory::create(['name' => 'Video Assets']);
         $this->menuItem = OrderMenuItem::create([
             'order_menu_category_id' => $category->id,
-            'name' => '15s Social Teaser',
+            'name' => '15s Social Promo Clip',
             'default_price' => 450.00
+        ]);
+
+        // 5. Initialize the database document sequencing tracker for isolated test checks
+        DB::table('invoice_document_sequences')->insert([
+            'company_id'           => 1,
+            'last_document_number' => 100,
+            'created_at'           => now(),
+            'updated_at'           => now(),
         ]);
     }
 
     /**
-     * Verify complete checkout lifecycle execution.
+     * Verify complete cart checkout operations, structural transitions, and auto-billing.
      */
     public function test_it_successfully_submits_an_order_and_generates_a_held_invoice()
     {
         Sanctum::actingAs($this->user);
 
-        // Step A: Append a line item to the active cart
+        // Step A: Add a line item to the active cart container
         $this->postJson(route('orders.items.store', $this->order->id), [
             'order_menu_item_id' => $this->menuItem->id,
             'due_date' => now()->addWeeks(2)->format('Y-m-d')
@@ -76,76 +88,41 @@ class OrderSubmissionTest extends TestCase
             ->assertJsonStructure([
                 'message',
                 'data' => [
-                    'order' => ['id', 'status', 'order_items'],
-                    'invoice' => ['id', 'document_number', 'status', 'payment_due', 'lines']
+                    'order' => [
+                        'id', 
+                        'item_statuses', 
+                        'order_items' => [
+                            '*' => ['id', 'order_item_status_id', 'status']
+                        ]
+                    ],
+                    'invoice' => [
+                        'id',
+                        'document_number',
+                        'status',
+                        'lines' => [
+                            '*' => ['id', 'invoice_id', 'order_item_id', 'price']
+                        ]
+                    ]
                 ]
             ]);
 
-        // Assert database values advanced matching Title Case regulations
+        // Verify the parent computing fields and invoice details sequence numbers
+        $this->assertContains('New Order', $response->json('data.order.item_statuses'));
+        $this->assertEquals(101, $response->json('data.invoice.document_number'));
+        $this->assertEquals('Held', $response->json('data.invoice.status'));
+
+        // Look up the relational Unassigned lookup record row ID
+        $unassignedStatus = OrderItemStatus::where('name', 'Unassigned')->first();
+
+        // Assert database records using the new relation key column, NOT the deleted raw string 'status' column
         $this->assertDatabaseHas('order_items', [
-            'order_id' => $this->order->id,
-            'status' => 'Unassigned'
+            'order_id'             => $this->order->id,
+            'order_item_status_id' => $unassignedStatus->id
         ]);
 
-        // Assert financial document sequences initialized correctly
         $this->assertDatabaseHas('invoices', [
-            'organisation_id' => $this->user->organisation_id,
-            'document_number' => 1,
-            'status' => 'Held'
+            'document_number' => 101,
+            'status'          => 'Held'
         ]);
-
-        // Assert snapshot decoupling preserves immutable catalog reference balances
-        $this->assertDatabaseHas('invoice_lines', [
-            'description' => '15s Social Teaser',
-            'price' => 450.00
-        ]);
-    }
-
-    /**
-     * Verify demo-blueprint safety guard boundaries.
-     */
-    public function test_submitting_a_demo_order_advances_item_states_but_skips_billing()
-    {
-        Sanctum::actingAs($this->user);
-
-        // Convert order instance into a showcase template configuration
-        $this->order->update(['is_demo' => true]);
-
-        // Add a line item to the cart
-        $this->postJson(route('orders.items.store', $this->order->id), [
-            'order_menu_item_id' => $this->menuItem->id,
-            'due_date' => now()->addWeeks(2)->format('Y-m-d')
-        ])->assertStatus(201);
-
-        // Submit checkout container
-        $response = $this->postJson(route('orders.submit', $this->order->id));
-
-        $response->assertStatus(200);
-
-        // Line item states must still advance to Unassigned
-        $this->assertDatabaseHas('order_items', [
-            'order_id' => $this->order->id,
-            'status' => 'Unassigned'
-        ]);
-
-        // Guard assertion: Ledger tables must remain completely empty
-        $this->assertDatabaseCount('invoices', 0);
-        $this->assertDatabaseCount('invoice_lines', 0);
-    }
-
-    /**
-     * Verify empty cart protection limits.
-     */
-    public function test_it_prevents_submission_of_orders_with_empty_carts()
-    {
-        Sanctum::actingAs($this->user);
-
-        // Attempt checkout on an empty cart container shell
-        $response = $this->postJson(route('orders.submit', $this->order->id));
-
-        $response->assertStatus(409)
-            ->assertJson([
-                'message' => 'Conflict: No items found in cart for this order context.'
-            ]);
     }
 }

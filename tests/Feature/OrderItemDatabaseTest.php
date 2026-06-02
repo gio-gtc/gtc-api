@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\OrderMenuCategory;
+use App\Models\OrderItemStatus;
 use App\Models\OrderMenuItem;
-use App\Models\User;
+use Database\Seeders\OrderStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -14,49 +14,88 @@ class OrderItemDatabaseTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_an_order_item_can_safely_store_and_retrieve_json_specifications()
+    protected function setUp(): void
     {
-        $category = OrderMenuCategory::create(['name' => 'Broadcast Video']);
-        $menuItem = OrderMenuItem::create([
-            'order_menu_category_id' => $category->id,
-            'name' => '30s Trailer',
-            'default_price' => 500.00
-        ]);
-        $order = Order::factory()->create();
-
-        // Act - Inject custom array properties into specs column
-        $item = OrderItem::create([
-            'order_id' => $order->id,
-            'order_menu_item_id' => $menuItem->id,            
-            'locked_price' => 500.00,
-            'specifications' => [
-                'encoding' => 'ProRes 422',
-                'isci' => 'GTC000001'
-            ]
-        ]);
-
-        // Assert - Pull record directly from database storage
-        $freshItem = OrderItem::find($item->id);
-
-        $this->assertEquals('ProRes 422', $freshItem->specifications['encoding']);
-        $this->assertEquals('GTC000001', $freshItem->specifications['isci']);
-        $this->assertIsArray($freshItem->specifications);
+        parent::setUp();
+        $this->seed(OrderStatusSeeder::class);
     }
 
-    public function test_multiple_creative_users_can_be_assigned_to_a_single_order_item()
+    /**
+     * Verify serialization and integrity of freeform metadata specification elements.
+     */
+    public function test_an_order_item_can_safely_store_and_retrieve_json_specifications()
     {
-        $orderItem = OrderItem::factory()->create();
-        $user1 = User::factory()->create();
-        $user2 = User::factory()->create();
+        $order = Order::factory()->create();
+        $menuItem = OrderMenuItem::factory()->create();
+        $unassignedStatus = OrderItemStatus::where('name', 'Unassigned')->first();
 
-        // Act - Attach multiple users through our relational model pivot
-        $orderItem->assignees()->attach([$user1->id, $user2->id]);
-
-        // Assert
-        $this->assertEquals(2, $orderItem->assignees()->count());
-        $this->assertDatabaseHas('order_item_assignee', [
-            'order_item_id' => $orderItem->id,
-            'user_id' => $user1->id
+        // Pass the required dictionary primary key index
+        $item = OrderItem::create([
+            'order_id'             => $order->id,
+            'order_menu_item_id'   => $menuItem->id,
+            'order_item_status_id' => $unassignedStatus->id,
+            'locked_price'         => 500,
+            'specifications'       => ['encoding' => 'ProRes 422']
         ]);
+
+        $this->assertDatabaseHas('order_items', [
+            'id'                   => $item->id,
+            'order_item_status_id' => $unassignedStatus->id,
+        ]);
+
+        // Validate casting layer parsing
+        $this->assertEquals('ProRes 422', $item->fresh()->specifications['encoding']);
+        
+        // Validate our backwards-compatible JSON root text accessor strings
+        $this->assertEquals('Unassigned', $item->status);
+    }
+
+    /**
+     * Verify that mutating child item rows automatically re-computes parent indexing tables.
+     */
+    public function test_changing_item_status_automatically_recalculates_parent_order_statuses()
+    {
+        $order = Order::factory()->create();
+        $menuItem = OrderMenuItem::factory()->create();
+        
+        $unassignedStatus   = OrderItemStatus::where('name', 'Unassigned')->first();
+        $inProductionStatus = OrderItemStatus::where('name', 'In Production')->first();
+        $deliveryStatus     = OrderItemStatus::where('name', 'Out For Delivery')->first();
+
+        // 1. Append an Unassigned item -> Header array should populate 'New Order'
+        $item1 = OrderItem::create([
+            'order_id'             => $order->id,
+            'order_menu_item_id'   => $menuItem->id,
+            'order_item_status_id' => $unassignedStatus->id,
+            'locked_price'         => 250,
+        ]);
+
+        $order->refresh();
+        $this->assertContains('New Order', $order->item_statuses);
+        $this->assertTrue($order->is_awaiting_assets); // Target icon warning triggers active
+
+        // 2. Append an In Production item -> Header array must contain BOTH states simultaneously
+        $item2 = OrderItem::create([
+            'order_id'             => $order->id,
+            'order_menu_item_id'   => $menuItem->id,
+            'order_item_status_id' => $inProductionStatus->id,
+            'locked_price'         => 350,
+        ]);
+
+        $order->refresh();
+        $this->assertContains('New Order', $order->item_statuses);
+        $this->assertContains('In Progress', $order->item_statuses);
+
+        // 3. Transition all items to Out For Delivery -> Matrix should clean up and pivot to Complete
+        $item1->update(['order_item_status_id' => $deliveryStatus->id]);
+        $item2->update(['order_item_status_id' => $deliveryStatus->id]);
+
+        $order->refresh();
+        $this->assertContains('Complete', $order->item_statuses);
+        $this->assertNotContains('New Order', $order->item_statuses);
+        $this->assertNotContains('In Progress', $order->item_statuses);
+        
+        // Ensure the missing assets boolean icon guard automatically flips to false
+        $this->assertFalse($order->is_awaiting_assets);
     }
 }
