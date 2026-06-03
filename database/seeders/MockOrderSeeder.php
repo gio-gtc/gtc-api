@@ -48,8 +48,8 @@ class MockOrderSeeder extends Seeder
         );
         shuffle($statusPool);
 
-        // 4. Generate the 20 test orders sequentially via a round-robin loop
-        for ($i = 0; $i < 20; $i++) {
+        // 4. Generate the 11 test orders sequentially via a round-robin loop
+        for ($i = 0; $i < 11; $i++) {
             $assignedTour = $tours[$i % $tourCount];
 
             $order = Order::factory()->create([
@@ -65,8 +65,9 @@ class MockOrderSeeder extends Seeder
                 ]);
             }
 
-            // Create exactly 2 items per order using our balanced dictionary pool ids
-            for ($k = 0; $k < 2; $k++) {
+            // Create attaches 4 to 1 random items per order using our balanced dictionary pool ids
+            $orderItems = rand(4, 10);
+            for ($k = 0; $k < $orderItems; $k++) {
                 $allocatedStatusId = array_pop($statusPool) ?? $itemStatuses->where('name', 'Unassigned')->first()->id;
 
                 OrderItem::factory()->create([
