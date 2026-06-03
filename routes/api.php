@@ -63,7 +63,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::apiResource('organisations', OrganisationController::class);
+    Route::get('/tours', [TourController::class, 'index'])->name('tours.index');
     Route::post('/tours', [TourController::class, 'store'])->name('tours.store');
+    Route::get('tours/{tour}/orders', [OrderController::class, 'getTourOrders']);
     Route::get('/venues', [VenueController::class, 'index'])->name('venues.index');
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');

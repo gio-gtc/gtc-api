@@ -19,6 +19,34 @@ class Organisation extends Model
         'rec_name', 'rec_tel'
     ];
 
+    // Inject these virtual properties whenever an organization is sent to the frontend
+    protected $appends = [
+        'country_code',
+        'is_international'
+    ];
+
+    /**
+     * Virtual Accessor: Extracts the raw country code string.
+     */
+    public function getCountryCodeAttribute(): ?string
+    {
+        if (!$this->relationLoaded('country')) {
+            return null;
+        }
+        return $this->country?->code;
+    }
+
+    /**
+     * Virtual Accessor: Computes internationality based on the corporate country entity.
+     */
+    public function getIsInternationalAttribute(): bool
+    {
+        if (!$this->relationLoaded('country') || !$this->country) {
+            return false;
+        }
+        return $this->country->code !== 'US';
+    }
+
     protected function casts(): array
     {
         return [
@@ -37,7 +65,7 @@ class Organisation extends Model
 
     public function country()
     {
-        return $this->belongsTo(Country::class);
+        return $this->belongsTo(Country::class, 'country_id');
     }
 
     public function types(): BelongsToMany

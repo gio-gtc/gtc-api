@@ -31,7 +31,8 @@ class Order extends Model
     protected $appends = [
         'is_awaiting_assets',
         'item_statuses',
-        'status'
+        'status',
+        'is_international'
     ];
 
     /**
@@ -45,6 +46,15 @@ class Order extends Model
                 $order->uuid = (string) Str::uuid();
             }
         });
+    }
+
+    /**
+     * Virtual Accessor: Bubbles up the international tracking flag 
+     * from the client's purchasing organization up to the root order layer.
+     */
+    public function getIsInternationalAttribute(): bool
+    {
+        return $this->client?->organisation?->is_international ?? false;
     }
 
     /**

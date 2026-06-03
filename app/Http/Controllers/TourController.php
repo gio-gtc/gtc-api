@@ -8,6 +8,77 @@ use Illuminate\Http\Request;
 
 class TourController extends Controller
 {
+
+    /**
+     * Streams a paginated list of tours tailored to user permissions.
+     * (Linked to route: GET /api/tours)
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tourQuery = Tour::select(['id', 'name', 'created_at', 'updated_at']);
+
+        // GLOBAL SERVER-SIDE ADVANCED FILTERS + SIDEBAR VIEWS LAYER
+        if ($request->hasAny(['client_ids', 'assignee_ids', 'statuses', 'is_international', 'tags', 'filter'])) {
+            $tourQuery->whereHas('orders', function ($query) use ($request, $user) {
+                
+                // Intercept "My Tasks" sidebar view request
+                if ($request->query('filter') === 'my-tasks') {
+                    $query->whereHas('orderItems.assignees', function ($q) use ($user) {
+                        $q->where('users.id', $user->id); // Restricts to the logged-in user's ID
+                    });
+                }
+
+                // Keep your other existing multi-select filter blocks intact below...
+                if ($request->filled('client_ids')) {
+                    $query->whereIn('ordered_by_id', $request->client_ids);
+                }
+
+                if ($request->filled('assignee_ids')) {
+                    $query->whereHas('orderItems.assignees', function ($q) use ($request) {
+                        $q->whereIn('users.id', $request->assignee_ids);
+                    });
+                }
+
+                if ($request->filled('statuses')) {
+                    $query->whereHas('orderItems.statusLookup.orderStatus', function ($q) use ($request) {
+                        $q->whereIn('name', $request->statuses);
+                    });
+                }
+
+                if ($request->filled('asset_tags')) {
+                    $query->whereHas('orderItems', function ($q) use ($request) {
+                        $q->where(function ($jsonQuery) use ($request) {
+                            foreach ($request->asset_tags as $tag) {
+                                $jsonQuery->orWhereJsonContains('specifications->awaiting_assets', $tag);
+                            }
+                        });
+                    });
+                }
+
+                if ($request->has('is_international') && $request->is_international !== null) {
+                    $query->whereHas('client.organisation.country', function ($q) use ($request) {
+                        $operator = filter_var($request->is_international, FILTER_VALIDATE_BOOLEAN) ? '!=' : '=';
+                        $q->where('code', $operator, 'US');
+                    });
+                }
+            });
+        }
+
+        // RBAC BOUNDARY (Preserve multi-tenant client constraints)
+        if (!$user->hasAnyRole(['Super Admin', 'Admin', 'Supervisor'])) {
+            $tourQuery->whereHas('orders', function ($query) use ($user) {
+                $query->where('ordered_by_id', $user->id)
+                    ->orWhereHas('client', function ($q) use ($user) {
+                        $q->where('organisation_id', $user->organisation_id);
+                    });
+            });
+        }
+
+        $paginatedTours = $tourQuery->latest()->paginate(15);
+        return response()->json($paginatedTours, 200);
+    }
+
     /**
      * Store a newly created tour in the database.
      */
