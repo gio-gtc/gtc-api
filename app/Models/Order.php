@@ -62,7 +62,12 @@ class Order extends Model
      */
     public function getIsAwaitingAssetsAttribute(): bool
     {
-        // Removed strict relation loaded guard to allow standard lazy loading during tests
+        // GUARD 1: If orderItems aren't eager-loaded, abort instantly 
+        // to prevent an N+1 query explosion across your accordion loops!
+        if (!$this->relationLoaded('orderItems')) {
+            return false;
+        }
+
         return $this->orderItems->contains(function ($item) {
             $specs = $item->specifications;
             
@@ -71,10 +76,14 @@ class Order extends Model
                 return true;
             }
 
-            // 2. Legacy Pipeline Fallback Layer: Support existing feature tests 
-            // where asset alerts are determined by early workflow status phases.
-            $statusName = $item->statusLookup?->name;
-            return in_array($statusName, ['New Order', 'Unassigned', 'Awaiting Assets']);
+            // 2. Legacy Pipeline Fallback Layer: Only check status names if pre-loaded
+            // ⚡ PROTECTION GUARD 2: Prevents line items from lazy-loading dictionary lookup rows
+            if ($item->relationLoaded('statusLookup')) {
+                $statusName = $item->statusLookup?->name;
+                return in_array($statusName, ['New Order', 'Unassigned', 'Awaiting Assets']);
+            }
+
+            return false;
         });
     }
 

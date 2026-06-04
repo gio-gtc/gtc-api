@@ -244,7 +244,7 @@ class OrderController extends Controller
                 'client.organisation:id,name,country_id',
                 'client.organisation.country:id,code',
                 'showDates:id,order_id,show_date',
-                'orderItems:id,order_id,order_item_status_id',
+                'orderItems:id,order_id,order_item_status_id,specifications',
                 'orderItems.statusLookup:id,name,order_status_id',
                 'orderItems.assignees:id,first_name,last_name,email,avatar',
             ]);
