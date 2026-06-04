@@ -13,19 +13,19 @@ class Order extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
-
-    // protected $fillable = [
-    //     'uuid',
-    //     'tour_id',
-    //     'venue_id',
-    //     'ordered_by_id',
-    //     'is_demo',
-    //     'local_deliverable_email',
-    //     'status',
-    //     'submitted_at',
-    //     'due_date'
-    // ];
+    protected $fillable = [
+        'tour_id',
+        'venue_id',
+        'ordered_by_id',
+        'is_demo',
+        'submitted_at',
+        'due_date',
+        'ticket_outlets',
+        'on_same_date',
+        'cardholder_times',
+        'logos',
+        'special_instructions',
+    ];
 
     // Automatically inject these properties into all outgoing JSON serialization blocks
     protected $appends = [

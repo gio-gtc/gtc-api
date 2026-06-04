@@ -237,7 +237,11 @@ class OrderController extends Controller
     {
         $user = $request->user();
         
-        $ordersQuery = Order::where('tour_id', $tour->id)
+        $ordersQuery = Order::select([
+                'id', 'uuid', 'tour_id', 'venue_id', 'ordered_by_id', 
+                'is_demo', 'submitted_at', 'due_date', 'created_at', 'updated_at'
+            ])
+            ->where('tour_id', $tour->id)
             ->with([
                 'venue:id,name,city,state',
                 'client:id,first_name,last_name,email,organisation_id',
@@ -246,10 +250,11 @@ class OrderController extends Controller
                 'showDates:id,order_id,show_date',
                 'orderItems:id,order_id,order_item_status_id,specifications',
                 'orderItems.statusLookup:id,name,order_status_id',
+                'orderItems.statusLookup.orderStatus:id,name',
                 'orderItems.assignees:id,first_name,last_name,email,avatar',
             ]);
 
-        // NEW: Apply the "My Tasks" row pruning strategy
+        // Apply the "My Tasks" row pruning strategy
         if ($request->query('filter') === 'my-tasks') {
             $ordersQuery->whereHas('orderItems.assignees', function ($q) use ($user) {
                 $q->where('users.id', $user->id);
@@ -302,5 +307,27 @@ class OrderController extends Controller
 
         $orders = $ordersQuery->latest()->get();
         return response()->json(['data' => $orders], 200);
+    }
+
+    /**
+     * Updates slideout header parameters for an existing order.
+     * Route: PATCH /api/orders/{order}
+     */
+    public function update(Order $order, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ticket_outlets'       => 'nullable|string',
+            'on_same_date'         => 'nullable|string',
+            'cardholder_times'     => 'nullable|string',
+            'logos'                => 'nullable|string',
+            'special_instructions' => 'nullable|string',
+        ]);
+
+        $order->update($validated);
+
+        return response()->json([
+            'message' => 'Order workspace updated successfully.',
+            'data'    => $order
+        ], 200);
     }
 }

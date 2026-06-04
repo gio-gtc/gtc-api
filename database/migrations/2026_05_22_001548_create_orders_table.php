@@ -18,6 +18,11 @@ return new class extends Migration
             $table->string('local_deliverable_email')->nullable();
             $table->timestamp('submitted_at')->nullable();
             $table->date('due_date')->nullable();
+            $table->text('ticket_outlets')->nullable();
+            $table->text('on_same_date')->nullable();
+            $table->text('cardholder_times')->nullable();
+            $table->text('logos')->nullable();
+            $table->text('special_instructions')->nullable();
             $table->timestamps();
         });
     }
