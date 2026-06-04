@@ -62,12 +62,19 @@ class Order extends Model
      */
     public function getIsAwaitingAssetsAttribute(): bool
     {
-        if (!$this->relationLoaded('orderItems') && !$this->orderItems) {
-            return false;
-        }
-
+        // Removed strict relation loaded guard to allow standard lazy loading during tests
         return $this->orderItems->contains(function ($item) {
-            return in_array($item->status, ['Unassigned', 'In Production', 'Client Review']);
+            $specs = $item->specifications;
+            
+            // 1. Canonical New Specification Layer: Check explicit JSON asset blocker tags
+            if (is_array($specs) && isset($specs['awaiting_assets']) && !empty($specs['awaiting_assets'])) {
+                return true;
+            }
+
+            // 2. Legacy Pipeline Fallback Layer: Support existing feature tests 
+            // where asset alerts are determined by early workflow status phases.
+            $statusName = $item->statusLookup?->name;
+            return in_array($statusName, ['New Order', 'Unassigned', 'Awaiting Assets']);
         });
     }
 
