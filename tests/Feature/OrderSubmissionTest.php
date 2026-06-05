@@ -31,6 +31,13 @@ class OrderSubmissionTest extends TestCase
         // 1. Seed our baseline dictionary matrix into the SQLite testing memory space
         $this->seed(OrderStatusSeeder::class);
 
+        // Ensure your new menu catalog seed data is present for the checkout run
+        $this->seed(\Database\Seeders\MenuCatalogSeeder::class);
+        
+        // Grab the category 1 menu item that was seeded
+        $this->menuItem = \App\Models\OrderMenuItem::where('order_menu_category_id', 1)->first();
+        $this->order = \App\Models\Order::factory()->create();
+
         // 2. Setup testing organizational boundaries with credit terms
         $organisation = Organisation::create([
             'name' => 'GTC Test Label Group',
@@ -52,10 +59,18 @@ class OrderSubmissionTest extends TestCase
 
         // 4. Populate menu item blueprint details
         $category = OrderMenuCategory::create(['name' => 'Video Assets']);
-        $this->menuItem = OrderMenuItem::create([
-            'order_menu_category_id' => $category->id,
-            'name' => '15s Social Promo Clip',
-            'default_price' => 450.00
+        $this->menuItem = OrderMenuItem::factory()->create([
+            'order_menu_category_id' => 1, // Forces Category 1 validation alignment
+            'form_blueprint' => [
+                'encodings' => ['H264-MP4 (Online or Venue)'],
+                'types' => [
+                    'Broadcast TV Spot' => [
+                        'cuts'      => ['Main Event Teaser'],
+                        'durations' => [30],
+                        'languages' => ['English (US)'] // Matches your payload string exactly
+                    ]
+                ]
+            ]
         ]);
 
         // 5. Initialize the database document sequencing tracker for isolated test checks
@@ -77,7 +92,14 @@ class OrderSubmissionTest extends TestCase
         // Step A: Add a line item to the active cart container
         $this->postJson(route('orders.items.store', $this->order->id), [
             'order_menu_item_id' => $this->menuItem->id,
-            'due_date' => now()->addWeeks(2)->format('Y-m-d')
+            'due_date' => now()->addWeeks(2)->format('Y-m-d'),
+            'specifications' => [
+                'type'             => 'Broadcast TV Spot',
+                'cut'              => 'Main Event Teaser',
+                'duration_seconds' => 30,
+                'language'         => 'English (US)',
+                'encoding'         => 'H264-MP4 (Online or Venue)'
+            ]
         ])->assertStatus(201);
 
         // Step B: Submit checkout container parameters

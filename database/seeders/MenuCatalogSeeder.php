@@ -17,11 +17,41 @@ class MenuCatalogSeeder extends Seeder
                     'price' => 1200.00,
                     'tags' => ['Audio', 'Voice Over'],
                     'blueprint' => [
-                        'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
-                        'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of', 'Superless', 'Sample'],
-                        'durations' => [10, 15, 30],
-                        'languages' => ['English', 'Spanish', 'French'],
-                        'encodings' => ["H264-MP4 (Online or Venue)", "Station MP4 (Broadcast)", "Hulu", "Amazon", "Netflix", "Connect TV"]
+                        'encodings' => [
+                            "H264-MP4 (Online or Venue)", 
+                            "Station MP4 (Broadcast)", 
+                            "Hulu", 
+                            "Amazon", 
+                            "Netflix", 
+                            "Connect TV"
+                        ],
+                        'types' => [
+                            'Generic' => [
+                                'cuts'      => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of', 'Superless', 'Sample'],
+                                'durations' => [10, 15, 30],
+                                'languages' => ['English', 'Spanish', 'French']
+                            ],
+                            'AmEx' => [
+                                'cuts'      => ['Pre Sale', 'Now Through'],
+                                'durations' => [15, 30],
+                                'languages' => ['English', 'Spanish', 'French']
+                            ],
+                            'Verizon' => [
+                                'cuts'      => ['Pre Sale', 'Now Through'],
+                                'durations' => [15, 30],
+                                'languages' => ['English', 'Spanish', 'French']
+                            ],
+                            'Citi' => [
+                                'cuts'      => ['Pre Sale', 'Now Through'],
+                                'durations' => [15, 30],
+                                'languages' => ['English', 'Spanish', 'French']
+                            ],
+                            'International' => [
+                                'cuts'      => ['International TV Package'],
+                                'durations' => [30],
+                                'languages' => ['English']
+                            ]
+                        ]
                     ]
                 ]
             ],
