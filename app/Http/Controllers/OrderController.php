@@ -12,6 +12,7 @@ use App\Models\InvoiceLine;
 use App\Models\Tour;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 
 class OrderController extends Controller
 {
@@ -316,6 +317,9 @@ class OrderController extends Controller
     public function update(Order $order, Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'show_dates'           => 'nullable|array',
+            'show_dates.*.id'      => 'nullable|integer|exists:order_show_dates,id',
+            'show_dates.*.show_date' => 'required_with:show_dates|date_format:Y-m-d',
             'ticket_outlets'       => 'nullable|string',
             'on_same_date'         => 'nullable|string',
             'cardholder_times'     => 'nullable|string',
@@ -323,11 +327,31 @@ class OrderController extends Controller
             'special_instructions' => 'nullable|string',
         ]);
 
-        $order->update($validated);
+        // Update the root order attributes, filtering out the relational array
+        $order->update(Arr::except($validated, ['show_dates']));
+
+        // Synchronize the OrderShowDate records
+        if ($request->has('show_dates')) {
+            $incomingDates = collect($request->input('show_dates'));
+
+            // Find all IDs passed from the request to determine what stays
+            $keepIds = $incomingDates->pluck('id')->filter()->toArray();
+
+            // SQL Step 1: DELETE any existing show dates that were omitted from the payload
+            $order->showDates()->whereNotIn('id', $keepIds)->delete();
+
+            // SQL Step 2: UPSERT (Update matching rows / Insert fresh ones)
+            foreach ($incomingDates as $dateItem) {
+                $order->showDates()->updateOrCreate(
+                    ['id' => $dateItem['id'] ?? null],
+                    ['show_date' => $dateItem['show_date']]
+                );
+            }
+        }
 
         return response()->json([
-            'message' => 'Order workspace updated successfully.',
-            'data'    => $order
+            'message' => 'Order workspace and show dates successfully synchronized.',
+            'data'    => $order->fresh(['showDates'])
         ], 200);
     }
 }
