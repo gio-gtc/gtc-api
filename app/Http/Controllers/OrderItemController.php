@@ -144,13 +144,14 @@ class OrderItemController extends Controller
     {
         $menuItem = $orderItem->orderMenuItem;
 
+        // 1. Block modifications if the current record node is already cancelled
         if ($orderItem->statusLookup?->name === 'Cancelled' || (int)$orderItem->order_item_status_id === 5) {
             return response()->json([
                 'errors' => ['specifications' => ['This line item has been cancelled and can no longer be modified.']]
             ], 422);
         }
 
-        // Route processing only for Category 1 elements
+        // 2. Validate incoming changes if the item belongs to Category 1
         if ((int)$menuItem->order_menu_category_id === 1) {
             $customErrors = $this->validateVideoSpecifications($menuItem, $request->input('specifications', []));
             if (count($customErrors) > 0) {
@@ -158,15 +159,48 @@ class OrderItemController extends Controller
             }
         }
 
-        // Keep existing due date if not provided in update payload
-        $orderItem->update([
-            'due_date'       => $request->input('due_date', $orderItem->due_date),
-            'specifications' => $request->input('specifications', $orderItem->specifications),
-        ]);
+        // 3. Orchestrate the Immutable "Cancel and Re-issue" Versioning Loop
+        $newVersionItem = \Illuminate\Support\Facades\DB::transaction(function () use ($orderItem, $request, $menuItem) {
+            // Find the 'Cancelled' status index from your relationship functions
+            $statusModelClass = $orderItem->statusLookup()->getRelated();
+            $cancelledStatus = $statusModelClass::where('name', 'Cancelled')->first();
+            $cancelledId = $cancelledStatus ? $cancelledStatus->id : 5;
+
+            // Mark the historical node as Cancelled to take it out of the active cart matrix
+            $orderItem->update([
+                'order_item_status_id' => $cancelledId
+            ]);
+
+            // Calculate version lineage metadata
+            $rootId = $orderItem->root_order_item_id ?? $orderItem->id;
+            $nextRevision = ((int) $orderItem->revision_number) + 1;
+
+            // Inject a rotated, distinct ISCI tracking identifier
+            $incomingSpecs = $request->input('specifications', []);
+            $finalSpecs = array_merge($incomingSpecs, [
+                'isci' => 'ISCI-' . strtoupper(Str::random(8)),
+            ]);
+
+            // Insert the fresh active revision node into the database
+            return OrderItem::create([
+                'order_id'                  => $orderItem->order_id,
+                'order_menu_item_id'        => $orderItem->order_menu_item_id,
+                'locked_price'              => $orderItem->locked_price,
+                'order_item_status_id'      => 1, // Reset state back to "Still In Cart"
+                'due_date'                  => $request->input('due_date', $orderItem->due_date),
+                'specifications'            => $finalSpecs,
+                'root_order_item_id'        => $rootId, // First node parent link
+                'supersedes_order_item_id'  => $orderItem->id, // Immediate historical neighbor link
+                'revision_number'           => $nextRevision, // Step up version counter
+            ]);
+        });
 
         return response()->json([
-            'message' => 'Line item specifications updated successfully.',
-            'data'    => $orderItem
+            'message' => 'Line item successfully updated. Old variant archived as Revision ' . $orderItem->revision_number . ', and fresh asset generated with a new ISCI code.',
+            'data'    => $newVersionItem->fresh([
+                'statusLookup:id,name,order_status_id',
+                'statusLookup.orderStatus:id,name'
+            ])
         ], 200);
     }
 
