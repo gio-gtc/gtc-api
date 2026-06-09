@@ -56,6 +56,8 @@ class OrderItemController extends Controller
                 'isci'             => 'ISCI-' . strtoupper(Str::random(8)),
             ]);
 
+            $itemTags = (array) ($menuItem->tags ?? []);
+
             // Track into structural core order_items table log
             return OrderItem::create([
                 'order_id'             => $order->id,
@@ -65,6 +67,9 @@ class OrderItemController extends Controller
                 'due_date'             => $request->input('due_date'),
                 'specifiable_id'       => $broadcastSpec->id,
                 'specifiable_type'     => OrderItemBroadcastSpecification::class,
+                'audio_received'       => in_array('Audio', $itemTags, true) ? false : null,
+                'voice_over_received'  => in_array('Voice Over', $itemTags, true) ? false : null,
+                'art_received'         => in_array('Art', $itemTags, true) ? false : null,
             ]);
         });
 
