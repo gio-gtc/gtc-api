@@ -178,7 +178,7 @@ class OrderItemController extends Controller
             // Inject a rotated, distinct ISCI tracking identifier
             $incomingSpecs = $request->input('specifications', []);
             $finalSpecs = array_merge($incomingSpecs, [
-                'isci' => 'ISCI-' . strtoupper(Str::random(8)),
+                'isci' => 'ISCI-' . strtoupper(Str::random(8). 'R' . $nextRevision),
             ]);
 
             // Insert the fresh active revision node into the database

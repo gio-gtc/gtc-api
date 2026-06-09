@@ -73,6 +73,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('orders/{order}', [OrderController::class, 'update'])->name('orders.update');
     Route::post('/orders/{order}/submit', [OrderController::class, 'submit'])->name('orders.submit');
     Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
+    Route::patch('order-items/{orderItem}', [OrderItemController::class, 'update'])->name('order-items.update');
+    Route::delete('order-items/{orderItem}', [OrderItemController::class, 'destroy'])->name('order-items.destroy');
     Route::get('/order-catalog-menu', [OrderMenuController::class, 'index'])->name('order-catalog.index');
     Route::get('/reference-data', function () {
         return response()->json([
