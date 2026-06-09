@@ -222,7 +222,9 @@ class OrderController extends Controller
             'client',
             'showDates',
             'orderItems.orderMenuItem.category',
-            'orderItems.assignees'
+            'orderItems.assignees',
+            'orderItems.statusLookup', 
+            'orderItems.specifiable'
         ]);
 
         return response()->json([

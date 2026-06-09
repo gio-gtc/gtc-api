@@ -6,9 +6,12 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatus;
 use App\Models\OrderShowDate;
+use App\Models\OrderMenuItem;
+use App\Models\OrderItemBroadcastSpecification;
 use App\Models\Tour;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class MockOrderSeeder extends Seeder
 {
@@ -19,14 +22,12 @@ class MockOrderSeeder extends Seeder
         Order::query()->delete();
         Tour::query()->delete();
 
-        // 1. Generate random dummy testing users
         $dummyUsers = User::factory(25)->create();
         $dummyUsers->each(function ($user) {
             $randomRole = fake()->randomElement(['Designer', 'Client']);            
             $user->assignRole($randomRole);
         });
 
-        // 2. Generate mock tours cluster
         Tour::factory(5)->create();
         $tours = Tour::all();
         $tourCount = $tours->count();
@@ -36,19 +37,42 @@ class MockOrderSeeder extends Seeder
             $tourCount = $tours->count();
         }
 
-        // 3. Build an absolute pool of 40 elements to guarantee status allocations
+        $broadcastMenuItem = OrderMenuItem::where('order_menu_category_id', 1)->first() ?? OrderMenuItem::create([
+            'order_menu_category_id' => 1,
+            'name'                   => 'Broadcast & Streaming Video Details',
+            'slug'                   => 'broadcast-streaming-video-details',
+            'default_price'          => 250.00,
+            'form_blueprint'         => [
+                'encodings' => ['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ'],
+                'types' => [
+                    'Generic' => [
+                        'cuts' => ['Pre Sale', 'Week of', 'Post Sale'],
+                        'durations' => [15, 30, 60],
+                        'languages' => ['English', 'Spanish', 'French']
+                    ],
+                    'International' => [
+                        'cuts' => ['International TV Package'],
+                        'durations' => [30],
+                        'languages' => ['English']
+                    ]
+                ]
+            ]
+        ]);
+
         $itemStatuses = OrderItemStatus::all();
+        $canceledStatus = $itemStatuses->whereIn('name', ['Canceled', 'Cancelled'])->first();
+        $canceledId = $canceledStatus ? $canceledStatus->id : 5;
+
         $statusPool = array_merge(
-            array_fill(0, 3, $itemStatuses->where('name', 'Canceled')->first()->id),
-            array_fill(0, 7, $itemStatuses->where('name', 'Still In Cart')->first()->id),
-            array_fill(0, 7, $itemStatuses->where('name', 'Unassigned')->first()->id),
-            array_fill(0, 8, $itemStatuses->where('name', 'In Production')->first()->id),
-            array_fill(0, 7, $itemStatuses->where('name', 'Client Review')->first()->id),
-            array_fill(0, 8, $itemStatuses->where('name', 'Out For Delivery')->first()->id)
+            array_fill(0, 3, $canceledId),
+            array_fill(0, 7, $itemStatuses->where('name', 'Still In Cart')->first()?->id ?? 1),
+            array_fill(0, 7, $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2),
+            array_fill(0, 8, $itemStatuses->where('name', 'In Production')->first()?->id ?? 3),
+            array_fill(0, 7, $itemStatuses->where('name', 'Client Review')->first()?->id ?? 4),
+            array_fill(0, 8, $itemStatuses->where('name', 'Out For Delivery')->first()?->id ?? 6)
         );
         shuffle($statusPool);
 
-        // 4. Generate the 11 test orders sequentially via a round-robin loop
         for ($i = 0; $i < 11; $i++) {
             $assignedTour = $tours[$i % $tourCount];
 
@@ -56,7 +80,6 @@ class MockOrderSeeder extends Seeder
                 'tour_id' => $assignedTour->id,
             ]);
 
-            // Automatically attach 1 to 3 random running show nights
             $runNights = rand(1, 3);
             for ($j = 0; $j < $runNights; $j++) {
                 OrderShowDate::create([
@@ -65,19 +88,47 @@ class MockOrderSeeder extends Seeder
                 ]);
             }
 
-            // Create attaches 4 to 1 random items per order using our balanced dictionary pool ids
             $orderItems = rand(4, 10);
             for ($k = 0; $k < $orderItems; $k++) {
-                $allocatedStatusId = array_pop($statusPool) ?? $itemStatuses->where('name', 'Unassigned')->first()->id;
+                $allocatedStatusId = array_pop($statusPool) ?? $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2;
 
-                OrderItem::factory()->create([
+                $mediaType = fake()->randomElement(['Generic', 'International']);
+                
+                if ($mediaType === 'International') {
+                    $cut = 'International TV Package';
+                    $duration = 30;
+                    $language = 'English';
+                } else {
+                    $cut = fake()->randomElement(['Pre Sale', 'Week of', 'Post Sale']);
+                    $duration = fake()->randomElement([15, 30, 60]);
+                    $language = fake()->randomElement(['English', 'Spanish', 'French']);
+                }
+
+                // A. Persist the updated child row data block using the clean new class structure
+                $broadcastSpec = OrderItemBroadcastSpecification::create([
+                    'type'             => $mediaType,
+                    'cut'              => $cut,
+                    'duration_seconds' => $duration,
+                    'language'         => $language,
+                    'encoding'         => fake()->randomElement(['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ']),
+                    'encoding_custom'  => null,
+                    'isci'             => 'ISCI-' . strtoupper(Str::random(8)),
+                ]);
+
+                // B. Save matching record to master index log mapping line
+                OrderItem::create([
                     'order_id'             => $order->id,
+                    'order_menu_item_id'   => $broadcastMenuItem->id,
                     'order_item_status_id' => $allocatedStatusId,
+                    'locked_price'         => $broadcastMenuItem->default_price ?? 250.00,
+                    'due_date'             => now()->addDays(rand(5, 25))->format('Y-m-d'),
+                    'specifiable_id'       => $broadcastSpec->id,
+                    'specifiable_type'     => OrderItemBroadcastSpecification::class,
+                    'revision_number'      => 0,
                 ]);
             }
         }
 
-        // 5. Run the relational design staff line item assignment mock scripts
         $this->call([
             OrderItemAssigneeSeeder::class,
         ]);

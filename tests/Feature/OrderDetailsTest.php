@@ -109,16 +109,15 @@ class OrderDetailsTest extends TestCase
                     'order_items' => [
                         '*' => [
                             'id',
-                            'order_id',
                             'order_item_status_id',
-                            'status',
-                            'locked_price',
-                            'order_menu_item' => [
+                            'specifiable_id',
+                            'specifiable_type',
+                            'specifiable',
+                            'status_lookup' => [
                                 'id',
                                 'name',
-                                'category' => ['id', 'name']
-                            ],
-                            'assignees'
+                                'order_status_id'
+                            ]
                         ]
                     ]
                 ]
@@ -127,7 +126,7 @@ class OrderDetailsTest extends TestCase
         // Assert exact properties inside data layer to ensure relationships match target rows
         $this->assertEquals($this->order->id, $response->json('data.id'));
         $this->assertContains('New Order', $response->json('data.item_statuses'));
-        $this->assertEquals('Unassigned', $response->json('data.order_items.0.status'));
+        $this->assertEquals('Unassigned', $response->json('data.order_items.0.status_lookup.name'));
         $this->assertEquals('2026-07-20', $response->json('data.show_dates.0.show_date'));
         $this->assertEquals('Tour Hoodie Asset Blueprint', $response->json('data.order_items.0.order_menu_item.name'));
         $this->assertEquals('Merchandise Design', $response->json('data.order_items.0.order_menu_item.category.name'));

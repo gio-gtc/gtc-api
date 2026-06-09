@@ -6,6 +6,8 @@ use Tests\TestCase;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
+use App\Models\OrderItemStatus;
+use App\Models\OrderItemBroadcastSpecification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class OrderItemValidationTest extends TestCase
@@ -16,8 +18,12 @@ class OrderItemValidationTest extends TestCase
     {
         parent::setUp();
 
-        // Seed the menu items blueprint mapping configuration
+        // 1. Seed the menu items blueprint mapping configuration
         $this->seed(\Database\Seeders\MenuCatalogSeeder::class);
+
+        // 2. Seed necessary item lifecycle statuses to prevent relationship lookup faults
+        OrderItemStatus::create(['id' => 1, 'name' => 'Still In Cart', 'order_status_id' => 1]);
+        OrderItemStatus::create(['id' => 5, 'name' => 'Cancelled', 'order_status_id' => 1]);
     }
 
     /** @test */
@@ -26,23 +32,36 @@ class OrderItemValidationTest extends TestCase
         $order = Order::factory()->create();
         $menuItem = OrderMenuItem::where('order_menu_category_id', 1)->first();
 
+        // 🚀 REALIGNED payload string keys to conform with custom blueprint validation rules
         $payload = [
             'order_menu_item_id' => $menuItem->id,
             'due_date'           => '2026-06-20',
             'specifications'     => [
-                'type'             => 'Broadcast TV Spot',
-                'cut'              => 'Main Event Teaser',
+                'type'             => 'Generic',
+                'cut'              => 'Pre Sale',
                 'duration_seconds' => 30,
-                'language'         => 'English (US)',
-                'encoding'         => 'H264-MP4 (Online or Venue)'
+                'language'         => 'English',
+                'encoding'         => 'Station MP4 (Broadcast)'
             ]
         ];
 
         $response = $this->postJson("/api/orders/{$order->id}/items", $payload);
 
         $response->assertStatus(201);
+        
+        // Assert core order ledger entry was built
         $this->assertDatabaseHas('order_items', [
-            'order_id' => $order->id,
+            'order_id'         => $order->id,
+            'specifiable_type' => OrderItemBroadcastSpecification::class,
+        ]);
+
+        // 🚀 ADDED: Confirms that the child specification row was cleanly separated into its own table
+        $this->assertDatabaseHas('order_item_broadcast_specifications', [
+            'type'             => 'Generic',
+            'cut'              => 'Pre Sale',
+            'duration_seconds' => 30,
+            'language'         => 'English',
+            'encoding'         => 'Station MP4 (Broadcast)'
         ]);
     }
 
@@ -56,11 +75,11 @@ class OrderItemValidationTest extends TestCase
             'order_menu_item_id' => $menuItem->id,
             'due_date'           => '2026-06-20',
             'specifications'     => [
-                'type'             => 'Broadcast TV Spot',
-                'cut'              => 'Main Event Teaser',
+                'type'             => 'Generic',
+                'cut'              => 'Pre Sale',
                 'duration_seconds' => '30', // ❌ String integer should fail strict validation
-                'language'         => 'English (US)',
-                'encoding'         => 'H264-MP4 (Online or Venue)'
+                'language'         => 'English',
+                'encoding'         => 'Station MP4 (Broadcast)'
             ]
         ];
 
@@ -80,11 +99,11 @@ class OrderItemValidationTest extends TestCase
             'order_menu_item_id' => $menuItem->id,
             'due_date'           => '2026-06-20',
             'specifications'     => [
-                'type'             => 'Broadcast TV Spot',
-                'cut'              => 'Main Event Teaser',
+                'type'             => 'Generic',
+                'cut'              => 'Pre Sale',
                 'duration_seconds' => 30,
-                'language'         => 'English (US)',
-                'encoding'         => 'H264-MP4 (Online or Venue)',
+                'language'         => 'English',
+                'encoding'         => 'Station MP4 (Broadcast)',
                 'encoding_custom'  => 'Illegal Second Option' // ❌ Providing both must fail
             ]
         ];
@@ -98,9 +117,16 @@ class OrderItemValidationTest extends TestCase
     /** @test */
     public function it_transitions_status_to_cancelled_on_delete()
     {
-        // Setup an order and item inside the DB
+        // Generate specifiable child dependency to support controller refresh return rules
+        $broadcastSpec = OrderItemBroadcastSpecification::create([
+            'type' => 'Generic', 'cut' => 'Pre Sale', 'duration_seconds' => 30, 'language' => 'English'
+        ]);
+
+        // Setup an order and item inside the DB linked to seeded data configurations
         $orderItem = OrderItem::factory()->create([
-            'order_item_status_id' => 1 // Active
+            'order_item_status_id' => 1, // Active / Still In Cart
+            'specifiable_id'       => $broadcastSpec->id,
+            'specifiable_type'     => OrderItemBroadcastSpecification::class
         ]);
 
         $response = $this->deleteJson("/api/order-items/{$orderItem->id}");
@@ -110,7 +136,7 @@ class OrderItemValidationTest extends TestCase
         // Assert it was NOT deleted from table but status updated
         $this->assertDatabaseHas('order_items', [
             'id'                   => $orderItem->id,
-            'order_item_status_id' => 5 // Assuming 5 is your default Cancelled fallback key
+            'order_item_status_id' => 5 // Confirms transition to Cancelled status state string key
         ]);
     }
 }

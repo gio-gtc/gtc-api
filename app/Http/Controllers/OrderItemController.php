@@ -5,22 +5,22 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
-use App\Models\StatusLookup;
+use App\Models\OrderItemBroadcastSpecification;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Arr;
 
 class OrderItemController extends Controller
 {
     /**
-     * Appends a validated Category 1 video line item to an order.
+     * Handles adding a polymorphic broadcast item row to a parent order.
      * Route: POST /api/orders/{order}/items
      */
     public function store(Order $order, Request $request): JsonResponse
     {
-        // Step 1: Structural Baseline Payload Verification
         $baseValidator = Validator::make($request->all(), [
             'order_menu_item_id' => 'required|integer|exists:order_menu_items,id',
             'due_date'           => 'required|date_format:Y-m-d',
@@ -31,181 +31,105 @@ class OrderItemController extends Controller
             return response()->json(['errors' => $baseValidator->errors()], 422);
         }
 
-        // Step 2: Validate Menu Item and Category Association
         $menuItem = OrderMenuItem::findOrFail($request->input('order_menu_item_id'));
-        
         if ((int)$menuItem->order_menu_category_id !== 1) {
             return response()->json([
-                'errors' => ['order_menu_item_id' => ['The selected menu item does not belong to Category 1 (Broadcast & Streaming Video).']]
+                'errors' => ['order_menu_item_id' => ['The selected menu item does not belong to Category 1.']]
             ], 422);
         }
 
-        // Step 3: Deconstruct & Verify the Master form_blueprint JSON Column
-        $blueprint = $menuItem->form_blueprint;
-        if (blank($blueprint) || !is_array($blueprint) || !isset($blueprint['types'])) {
-            return response()->json([
-                'errors' => ['specifications' => ['The underlying menu item form blueprint config is invalid or missing types configuration.']]
-            ], 422);
-        }
-
-        // Gather specs targeted for fine-grained validation
         $specs = $request->input('specifications');
-        
-        // Manual validation container to map exact custom 422 error keys
-        $customErrors = [];
-
-        // Validate Type
-        $type = Arr::get($specs, 'type');
-        if (!is_string($type) || !array_key_exists($type, $blueprint['types'])) {
-            $customErrors['specifications.type'] = ['The selected type is invalid or not supported by this menu item.'];
-            return response()->json(['errors' => $customErrors], 422);
-        }
-
-        $typeConfig = $blueprint['types'][$type];
-        $cut = Arr::get($specs, 'cut');
-        $durationSeconds = Arr::get($specs, 'duration_seconds');
-        $language = Arr::get($specs, 'language');
-
-        // 🚀 LEGACY UI OVERRIDE GATEWAY: Match broadcast-encoding-matrix.ts
-        $isInternationalCut = ($cut === 'International TV Package' || $type === 'International');
-        if ($isInternationalCut) {
-            // Force duration_seconds to be strictly 30
-            if ($durationSeconds !== 30) {
-                $customErrors['specifications.duration_seconds'] = ['International TV Packages are strictly locked to 30 seconds.'];
-            }
-            // Force language to start with English or match blueprint entry
-            if (!is_string($language) || !Str::startsWith($language, 'English')) {
-                $customErrors['specifications.language'] = ['International TV Packages are locked to English deliverables.'];
-            }
-        } else {
-            // Standard Blueprint Rules Engine Execution (Case-Sensitive & Strict Type Matching)
-            if (!is_string($cut) || !in_array($cut, $typeConfig['cuts'] ?? [], true)) {
-                $customErrors['specifications.cut'] = ['The selected cut variant is not valid for this item type.'];
-            }
-
-            if (!is_int($durationSeconds) || !in_array($durationSeconds, $typeConfig['durations'] ?? [], true)) {
-                $customErrors['specifications.duration_seconds'] = ['The duration must be an integer matching allowed parameters: ' . implode(', ', $typeConfig['durations'] ?? [])];
-            }
-
-            if (!is_string($language) || !in_array($language, $typeConfig['languages'] ?? [], true)) {
-                $customErrors['specifications.language'] = ['The selected language delivery target is invalid.'];
-            }
-        }
-
-        // 🚀 ENCODING XOR LOGIC CONSTRAINT: Exactly one parameter can exist
-        $encoding = Arr::get($specs, 'encoding');
-        $encodingCustom = trim((string) Arr::get($specs, 'encoding_custom'));
-
-        $hasCatalog = !blank($encoding);
-        $hasCustom = !blank($encodingCustom);
-
-        if (($hasCatalog && $hasCustom) || (!$hasCatalog && !$hasCustom)) {
-            $customErrors['specifications.encoding'] = ['Exactly one of encoding (catalog) or encoding_custom must be provided.'];
-            $customErrors['specifications.encoding_custom'] = ['Exactly one of encoding (catalog) or encoding_custom must be provided.'];
-        } else {
-            if ($hasCatalog) {
-                if (!in_array($encoding, $blueprint['encodings'] ?? [], true)) {
-                    $customErrors['specifications.encoding'] = ['The selected catalog profile is invalid for this delivery platform.'];
-                }
-            }
-        }
-
-        // Short-circuit execution if any custom business rules failed validation
+        $customErrors = $this->validateVideoSpecifications($menuItem, $specs);
         if (count($customErrors) > 0) {
             return response()->json(['errors' => $customErrors], 422);
         }
 
-        // Step 4: Inject Default Values & Persist to the Database
-        // Automatically calculate and inject systemic internal trackers
-        $finalSpecs = array_merge($specs, [
-            'isci' => 'ISCI-' . strtoupper(Str::random(8)), // Inject platform unique clock identifier 
-        ]);
+        $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
+            // Create concrete table details record
+            $broadcastSpec = OrderItemBroadcastSpecification::create([
+                'type'             => $specs['type'],
+                'cut'              => $specs['cut'],
+                'duration_seconds' => (int) $specs['duration_seconds'],
+                'language'         => $specs['language'],
+                'encoding'         => $specs['encoding'] ?? null,
+                'encoding_custom'  => $specs['encoding_custom'] ?? null,
+                'isci'             => 'ISCI-' . strtoupper(Str::random(8)),
+            ]);
 
-        $item = OrderItem::create([
-            'order_id'             => $order->id,
-            'order_menu_item_id'   => $menuItem->id,
-            'locked_price'         => $menuItem->default_price ?? '0.00', // Snapshot historical financial data
-            'order_item_status_id' => 1, // Defaults cleanly to "Still In Cart" state index
-            'due_date'             => $request->input('due_date'),
-            'specifications'       => $finalSpecs,
-        ]);
+            // Track into structural core order_items table log
+            return OrderItem::create([
+                'order_id'             => $order->id,
+                'order_menu_item_id'   => $menuItem->id,
+                'locked_price'         => $menuItem->default_price ?? '0.00',
+                'order_item_status_id' => 1, 
+                'due_date'             => $request->input('due_date'),
+                'specifiable_id'       => $broadcastSpec->id,
+                'specifiable_type'     => OrderItemBroadcastSpecification::class,
+            ]);
+        });
 
         return response()->json([
             'message' => 'Video delivery item successfully authorized and appended to cart.',
-            'data'    => $item
+            'data'    => $item->fresh(['specifiable', 'statusLookup'])
         ], 201);
     }
 
     /**
-     * Updates an existing line item's specifications.
+     * Executes an in-place update on the specification entity tables while auto-incrementing the R-counter.
      * Route: PATCH /api/order-items/{orderItem}
      */
     public function update(OrderItem $orderItem, Request $request): JsonResponse
     {
         $menuItem = $orderItem->orderMenuItem;
 
-        // 1. Block modifications if the current record node is already cancelled
         if ($orderItem->statusLookup?->name === 'Cancelled' || (int)$orderItem->order_item_status_id === 5) {
             return response()->json([
                 'errors' => ['specifications' => ['This line item has been cancelled and can no longer be modified.']]
             ], 422);
         }
 
-        // 2. Validate incoming changes if the item belongs to Category 1
+        $incomingSpecs = $request->input('specifications', []);
         if ((int)$menuItem->order_menu_category_id === 1) {
-            $customErrors = $this->validateVideoSpecifications($menuItem, $request->input('specifications', []));
+            $customErrors = $this->validateVideoSpecifications($menuItem, $incomingSpecs);
             if (count($customErrors) > 0) {
                 return response()->json(['errors' => $customErrors], 422);
             }
         }
 
-        // 3. Orchestrate the Immutable "Cancel and Re-issue" Versioning Loop
-        $newVersionItem = \Illuminate\Support\Facades\DB::transaction(function () use ($orderItem, $request, $menuItem) {
-            // Find the 'Cancelled' status index from your relationship functions
-            $statusModelClass = $orderItem->statusLookup()->getRelated();
-            $cancelledStatus = $statusModelClass::where('name', 'Cancelled')->first();
-            $cancelledId = $cancelledStatus ? $cancelledStatus->id : 5;
+        $orderItem = DB::transaction(function () use ($orderItem, $request, $incomingSpecs) {
+            $specification = $orderItem->specifiable;
+            $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
 
-            // Mark the historical node as Cancelled to take it out of the active cart matrix
+            if ($specification) {
+                $newIsci = 'ISCI-' . strtoupper(Str::random(8)) . 'R' . $nextRevision;
+
+                $specification->update([
+                    'type'             => $incomingSpecs['type'] ?? $specification->type,
+                    'cut'              => $incomingSpecs['cut'] ?? $specification->cut,
+                    'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : $specification->duration_seconds,
+                    'language'         => $incomingSpecs['language'] ?? $specification->language,
+                    'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : $specification->encoding,
+                    'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : $specification->encoding_custom,
+                    'isci'             => $newIsci,
+                ]);
+            }
+
             $orderItem->update([
-                'order_item_status_id' => $cancelledId
+                'due_date'        => $request->input('due_date', $orderItem->due_date),
+                'revision_number' => $nextRevision,
             ]);
 
-            // Calculate version lineage metadata
-            $rootId = $orderItem->root_order_item_id ?? $orderItem->id;
-            $nextRevision = ((int) $orderItem->revision_number) + 1;
-
-            // Inject a rotated, distinct ISCI tracking identifier
-            $incomingSpecs = $request->input('specifications', []);
-            $finalSpecs = array_merge($incomingSpecs, [
-                'isci' => 'ISCI-' . strtoupper(Str::random(8). 'R' . $nextRevision),
-            ]);
-
-            // Insert the fresh active revision node into the database
-            return OrderItem::create([
-                'order_id'                  => $orderItem->order_id,
-                'order_menu_item_id'        => $orderItem->order_menu_item_id,
-                'locked_price'              => $orderItem->locked_price,
-                'order_item_status_id'      => 1, // Reset state back to "Still In Cart"
-                'due_date'                  => $request->input('due_date', $orderItem->due_date),
-                'specifications'            => $finalSpecs,
-                'root_order_item_id'        => $rootId, // First node parent link
-                'supersedes_order_item_id'  => $orderItem->id, // Immediate historical neighbor link
-                'revision_number'           => $nextRevision, // Step up version counter
-            ]);
+            return $orderItem;
         });
 
         return response()->json([
-            'message' => 'Line item successfully updated. Old variant archived as Revision ' . $orderItem->revision_number . ', and fresh asset generated with a new ISCI code.',
-            'data'    => $newVersionItem->fresh([
-                'statusLookup:id,name,order_status_id',
-                'statusLookup.orderStatus:id,name'
-            ])
+            'message' => "Line item specifications updated successfully to Revision {$orderItem->revision_number}.",
+            'data'    => $orderItem->fresh(['specifiable', 'statusLookup'])
         ], 200);
     }
 
     /**
-     * DRY Shared Validator Routine for Category 1 Video Assets
+     * Shared Validation Logic Engine
      */
     private function validateVideoSpecifications(OrderMenuItem $menuItem, ?array $specs): array
     {
@@ -217,23 +141,22 @@ class OrderItemController extends Controller
             return $customErrors;
         }
 
-        $type = \Illuminate\Support\Arr::get($specs, 'type');
+        $type = Arr::get($specs, 'type');
         if (!is_string($type) || !array_key_exists($type, $blueprint['types'])) {
             $customErrors['specifications.type'] = ['The selected type is invalid.'];
             return $customErrors;
         }
 
         $typeConfig = $blueprint['types'][$type];
-        $cut = \Illuminate\Support\Arr::get($specs, 'cut');
-        $durationSeconds = \Illuminate\Support\Arr::get($specs, 'duration_seconds');
-        $language = \Illuminate\Support\Arr::get($specs, 'language');
+        $cut = Arr::get($specs, 'cut');
+        $durationSeconds = Arr::get($specs, 'duration_seconds');
+        $language = Arr::get($specs, 'language');
 
-        // Legacy Overrides Check
         if ($cut === 'International TV Package' || $type === 'International') {
             if ($durationSeconds !== 30) {
                 $customErrors['specifications.duration_seconds'] = ['International spots are locked to 30 seconds.'];
             }
-            if (!is_string($language) || !\Illuminate\Support\Str::startsWith($language, 'English')) {
+            if (!is_string($language) || !Str::startsWith($language, 'English')) {
                 $customErrors['specifications.language'] = ['International spots are locked to English.'];
             }
         } else {
@@ -248,9 +171,8 @@ class OrderItemController extends Controller
             }
         }
 
-        // XOR Encoding Verification
-        $encoding = \Illuminate\Support\Arr::get($specs, 'encoding');
-        $encodingCustom = trim((string) \Illuminate\Support\Arr::get($specs, 'encoding_custom'));
+        $encoding = Arr::get($specs, 'encoding');
+        $encodingCustom = trim((string) Arr::get($specs, 'encoding_custom'));
         $hasCatalog = !blank($encoding);
         $hasCustom = !blank($encodingCustom);
 
@@ -264,30 +186,22 @@ class OrderItemController extends Controller
     }
 
     /**
-     * Prunes a single line item row from an order container.
+     * Soft cancels an active row from a cart checkout view container node index.
      * Route: DELETE /api/order-items/{orderItem}
      */
     public function destroy(OrderItem $orderItem): JsonResponse
     {
         $statusModelClass = $orderItem->statusLookup()->getRelated();
-        
-        // Query that model to find the 'Cancelled' row
         $cancelledStatus = $statusModelClass::where('name', 'Cancelled')->first();
-        
-        // Safe fallback to ID 5 if your database seeder hasn't run yet
         $statusId = $cancelledStatus ? $cancelledStatus->id : 5; 
 
-        // Update the item state
         $orderItem->update([
             'order_item_status_id' => $statusId
         ]);
 
         return response()->json([
             'message' => 'Line item successfully transitioned to Cancelled state.',
-            'data'    => $orderItem->fresh([
-                'statusLookup:id,name,order_status_id',
-                'statusLookup.orderStatus:id,name'
-            ])
+            'data'    => $orderItem->fresh(['specifiable', 'statusLookup'])
         ], 200);
     }
 }

@@ -114,7 +114,18 @@ class OrderSubmissionTest extends TestCase
                         'id', 
                         'item_statuses', 
                         'order_items' => [
-                            '*' => ['id', 'order_item_status_id', 'status']
+                            '*' => [
+                                'id',
+                                'order_item_status_id',
+                                'specifiable_id',
+                                'specifiable_type',
+                                'specifiable',
+                                'status_lookup' => [
+                                    'id',
+                                    'name',
+                                    'order_status_id'
+                                ]
+                            ]
                         ]
                     ],
                     'invoice' => [

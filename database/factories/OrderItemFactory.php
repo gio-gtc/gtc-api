@@ -64,12 +64,14 @@ class OrderItemFactory extends Factory
         $finalDueDate = $order->is_demo ? null : now()->addWeeks(2)->format('Y-m-d');
 
         return [
-            'order_id'             => $order->id,
-            'order_menu_item_id'   => $menuItem->id,
-            'locked_price'         => $menuItem->default_price,
-            'order_item_status_id' => $finalStatusId,
-            'due_date'             => $finalDueDate,
-            'specifications'       => $randomSpecs, // Contains awaiting_assets and is_localized arrays/booleans
+            'order_id'             => Order::factory(),
+            'order_menu_item_id'   => OrderMenuItem::factory(),
+            'order_item_status_id' => 1,
+            'locked_price'         => $this->faker->randomElement([150.00, 250.00, 500.00]),
+            'due_date'             => $this->faker->dateTimeBetween('+1 week', '+1 month')->format('Y-m-d'),
+            'revision_number'      => 0,            
+            'specifiable_id'       => null,
+            'specifiable_type'     => null,
         ];
     }
 }

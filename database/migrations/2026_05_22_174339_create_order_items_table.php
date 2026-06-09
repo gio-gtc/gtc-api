@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedBigInteger('order_item_status_id')->index();
             $table->decimal('locked_price', 10, 2);
             $table->date('due_date')->nullable();
-            $table->json('specifications')->nullable();
+            $table->nullableMorphs('specifiable');
             $table->unsignedBigInteger('root_order_item_id')->nullable();
             $table->integer('revision_number')->default(1);
             $table->unsignedBigInteger('supersedes_order_item_id')->nullable();
@@ -29,5 +29,10 @@ return new class extends Migration
                 ->on('order_item_statuses')
                 ->onDelete('restrict'); // Protects dictionary records from accidental deletion
         });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('order_items');
     }
 };
