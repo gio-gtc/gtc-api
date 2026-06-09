@@ -251,7 +251,7 @@ class OrderController extends Controller
                 'client.organisation:id,name,country_id',
                 'client.organisation.country:id,code',
                 'showDates:id,order_id,show_date',
-                'orderItems:id,order_id,order_item_status_id,specifications',
+                'orderItems:id,order_id,order_menu_item_id,order_item_status_id,locked_price,due_date,revision_number,specifiable_id,specifiable_type,audio_received,voice_over_received,art_received',
                 'orderItems.statusLookup:id,name,order_status_id',
                 'orderItems.statusLookup.orderStatus:id,name',
                 'orderItems.assignees:id,first_name,last_name,email,avatar',
@@ -285,7 +285,14 @@ class OrderController extends Controller
             $ordersQuery->whereHas('orderItems', function ($q) use ($request) {
                 $q->where(function ($jsonQuery) use ($request) {
                     foreach ($request->asset_tags as $tag) {
-                        $jsonQuery->orWhereJsonContains('specifications->awaiting_assets', $tag);
+                        $normalizedTag = strtolower($tag);
+                        if ($normalizedTag === 'audio') {
+                            $jsonQuery->orWhere('audio_received', false);
+                        } elseif ($normalizedTag === 'voice over') {
+                            $jsonQuery->orWhere('voice_over_received', false);
+                        } elseif ($normalizedTag === 'art' || $normalizedTag === 'key art') {
+                            $jsonQuery->orWhere('art_received', false);
+                        }
                     }
                 });
             });

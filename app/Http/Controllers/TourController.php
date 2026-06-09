@@ -50,7 +50,14 @@ class TourController extends Controller
                     $query->whereHas('orderItems', function ($q) use ($request) {
                         $q->where(function ($jsonQuery) use ($request) {
                             foreach ($request->asset_tags as $tag) {
-                                $jsonQuery->orWhereJsonContains('specifications->awaiting_assets', $tag);
+                                $normalizedTag = strtolower($tag);
+                                if ($normalizedTag === 'audio') {
+                                    $jsonQuery->orWhere('audio_received', false);
+                                } elseif ($normalizedTag === 'voice over') {
+                                    $jsonQuery->orWhere('voice_over_received', false);
+                                } elseif ($normalizedTag === 'art' || $normalizedTag === 'key art') {
+                                    $jsonQuery->orWhere('art_received', false);
+                                }
                             }
                         });
                     });

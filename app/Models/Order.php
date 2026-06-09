@@ -69,7 +69,7 @@ class Order extends Model
         }
 
         return $this->orderItems->contains(function ($item) {
-            $specs = $item->specifications;
+            $specs = $item->specifiable ? $item->specifiable->toArray() : [];
             
             // 1. Canonical New Specification Layer: Check explicit JSON asset blocker tags
             if (is_array($specs) && isset($specs['awaiting_assets']) && !empty($specs['awaiting_assets'])) {
@@ -157,7 +157,20 @@ class Order extends Model
 
     public function orderItems(): HasMany
     {
-        return $this->hasMany(OrderItem::class);
+        return $this->hasMany(OrderItem::class)->select([
+            'id', 
+            'order_id', 
+            'order_menu_item_id',
+            'order_item_status_id',
+            'locked_price',
+            'due_date',
+            'revision_number',
+            'specifiable_id',
+            'specifiable_type',
+            'audio_received',
+            'voice_over_received',
+            'art_received'   
+        ]);
     }
 
     /**
