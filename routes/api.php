@@ -5,7 +5,6 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
 use App\Http\Controllers\AssigneeController;
-use App\Http\Controllers\ClientController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\ProfileController;
@@ -58,7 +57,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/password', [UserPasswordController::class, 'update']);
     Route::post('/users/invite', [UserOnboardingController::class, 'invite']);
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
-    Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
+    Route::get('/clients', [UserController::class, 'clientIndex'])->name('clients.index');
+    Route::get('/staff', [UserController::class, 'staffIndex'])->name('staff.index');
     Route::get('/departments', function () {
         return response()->json(['departments' => Department::all()]);
     });
