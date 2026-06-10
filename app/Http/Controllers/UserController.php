@@ -38,13 +38,34 @@ class UserController extends Controller
     /**
      * Fetch all external clients for selection pickers and dashboard views
      */
-    public function clientIndex(): JsonResponse
+    public function clientIndex(Request $request): JsonResponse
     {
-        // Fetches users who do NOT belong to the internal GTC staff organization
-        $clients = User::where('organisation_id', '!=', 1) 
-            ->select('id', 'first_name', 'last_name', 'email', 'avatar', 'organisation_id')
-            ->orderBy('first_name', 'asc')
-            ->get();
+        // 1. Initialize the base query for external organizations (non-GTC staff)
+        $query = User::where('organisation_id', '!=', 1)
+            ->select('id', 'first_name', 'last_name', 'email', 'avatar', 'organisation_id');
+
+        // 2. Check if a search query is actively provided
+        if ($request->filled('q')) {
+            $searchTerm = $request->input('q');
+
+            // Enforce the boundary constraint ONLY when a search is executing
+            if (mb_strlen($searchTerm) < 2) {
+                return response()->json([
+                    'message' => 'The search term must be at least 2 characters.',
+                    'errors'  => ['q' => ['The search term must be at least 2 characters.']]
+                ], 422);
+            }
+
+            // Apply search filters cleanly across names and emails
+            $query->where(function ($subQuery) use ($searchTerm) {
+                $subQuery->where('first_name', 'like', "%{$searchTerm}%")
+                    ->orWhere('last_name', 'like', "%{$searchTerm}%")
+                    ->orWhere('email', 'like', "%{$searchTerm}%");
+            });
+        }
+
+        // 3. Execute the payload compilation
+        $clients = $query->orderBy('first_name', 'asc')->get();
 
         return response()->json([
             'data' => $clients
