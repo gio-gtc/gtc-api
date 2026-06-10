@@ -16,166 +16,6 @@ use Illuminate\Support\Arr;
 class OrderItemController extends Controller
 {
     /**
-     * Handles adding a polymorphic broadcast item row to a parent order.
-     * Route: POST /api/orders/{order}/items
-     */
-    public function store(Order $order, Request $request): JsonResponse
-    {
-        $baseValidator = Validator::make($request->all(), [
-            'order_menu_item_id' => 'required|integer|exists:order_menu_items,id',
-            'due_date'           => 'required|date_format:Y-m-d',
-            'specifications'     => 'required|array',
-        ]);
-
-        if ($baseValidator->fails()) {
-            return response()->json(['errors' => $baseValidator->errors()], 422);
-        }
-
-        $menuItem = OrderMenuItem::findOrFail($request->input('order_menu_item_id'));
-        if ((int)$menuItem->order_menu_category_id !== 1) {
-            return response()->json([
-                'errors' => ['order_menu_item_id' => ['The selected menu item does not belong to Category 1.']]
-            ], 422);
-        }
-
-        $specs = $request->input('specifications');
-        $customErrors = $this->validateVideoSpecifications($menuItem, $specs);
-        if (count($customErrors) > 0) {
-            return response()->json(['errors' => $customErrors], 422);
-        }
-
-        $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
-            // 🚀 SEQUENTIAL LOOKUP: Detect the current sequence base line max height
-            $latestSpec = OrderItemBroadcastSpecification::orderBy('id', 'desc')->first();
-            $nextSequenceNumber = 1;
-
-            if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
-                // Isolates digits, converts string (e.g. "000042" -> 42), bumps up counter
-                $nextSequenceNumber = ((int) $matches[1]) + 1;
-            }
-
-            // Enforce strict 6-digit zero padding rule (e.g., GTC000001, GTC000184)
-            $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
-            $newIsci = "GTC{$paddedNumber}";
-
-            // Create concrete table details record
-            $broadcastSpec = OrderItemBroadcastSpecification::create([
-                'type'             => $specs['type'],
-                'cut'              => $specs['cut'],
-                'duration_seconds' => (int) $specs['duration_seconds'],
-                'language'         => $specs['language'],
-                'encoding'         => $specs['encoding'] ?? null,
-                'encoding_custom'  => $specs['encoding_custom'] ?? null,
-                'isci'             => $newIsci,
-            ]);
-
-            $itemTags = (array) ($menuItem->tags ?? []);
-
-            // Track into structural core order_items table log
-            return OrderItem::create([
-                'order_id'             => $order->id,
-                'order_menu_item_id'   => $menuItem->id,
-                'locked_price'         => $menuItem->default_price ?? '0.00',
-                'order_item_status_id' => 1, 
-                'due_date'             => $request->input('due_date'),
-                'specifiable_id'       => $broadcastSpec->id,
-                'specifiable_type'     => OrderItemBroadcastSpecification::class,
-                'audio_received'       => in_array('Audio', $itemTags, true) ? false : null,
-                'voice_over_received'  => in_array('Voice Over', $itemTags, true) ? false : null,
-                'art_received'         => in_array('Art', $itemTags, true) ? false : null,
-            ]);
-        });
-
-        return response()->json([
-            'message' => 'Video delivery item successfully authorized and appended to cart.',
-            'data'    => $item->fresh(['specifiable', 'statusLookup'])
-        ], 201);
-    }
-
-    /**
-     * Executes an in-place update on the specification entity tables while auto-incrementing the R-counter.
-     * Route: PATCH /api/order-items/{orderItem}
-     */
-    public function update(OrderItem $orderItem, Request $request): JsonResponse
-    {
-        $menuItem = $orderItem->orderMenuItem;
-
-        // 1. Guard against modifications on Cancelled items
-        if ($orderItem->statusLookup?->name === 'Cancelled' || (int)$orderItem->order_item_status_id === 5) {
-            return response()->json([
-                'errors' => ['specifications' => ['This line item has been cancelled and can no longer be modified.']]
-            ], 422);
-        }
-
-        $incomingSpecs = $request->input('specifications', []);
-        if ((int)$menuItem->order_menu_category_id === 1) {
-            $customErrors = $this->validateVideoSpecifications($menuItem, $incomingSpecs);
-            if (count($customErrors) > 0) {
-                return response()->json(['errors' => $customErrors], 422);
-            }
-        }
-
-        $orderItem = DB::transaction(function () use ($orderItem, $request, $incomingSpecs) {
-            $specification = $orderItem->specifiable;
-            $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
-
-            if ($specification) {
-                // 🚀 PURE SEQUENTIAL EXTRACTION
-                if (!empty($specification->isci)) {
-                    // Strip the trailing revision identifier safely (e.g., GTC000042R1 -> GTC000042)
-                    $baseIsci = preg_replace('/R\d+$/', '', $specification->isci);
-                } else {
-                    // COLLISION-PROOF FALLBACK: If the column is blank, calculate the next sequential integer
-                    $latestSpec = OrderItemBroadcastSpecification::orderBy('id', 'desc')->first();
-                    $nextSequenceNumber = 1;
-
-                    if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
-                        $nextSequenceNumber = ((int) $matches[1]) + 1;
-                    }
-
-                    $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
-                    $baseIsci = "GTC{$paddedNumber}";
-                }
-
-                $specification->update([
-                    'type'             => $incomingSpecs['type'] ?? $specification->type,
-                    'cut'              => $incomingSpecs['cut'] ?? $specification->cut,
-                    'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : $specification->duration_seconds,
-                    'language'         => $incomingSpecs['language'] ?? $specification->language,
-                    'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : $specification->encoding,
-                    'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : $specification->encoding_custom,
-                    'isci'             => "{$baseIsci}R{$nextRevision}",
-                ]);
-            }
-
-            $updateData = [
-                'due_date'        => $request->input('due_date', $orderItem->due_date),
-                'revision_number' => $nextRevision,
-            ];
-
-            // Authoritative 3-state asset checkmarks
-            if ($request->has('audio_received')) {
-                $updateData['audio_received'] = $request->input('audio_received');
-            }
-            if ($request->has('voice_over_received')) {
-                $updateData['voice_over_received'] = $request->input('voice_over_received');
-            }
-            if ($request->has('art_received')) {
-                $updateData['art_received'] = $request->input('art_received');
-            }
-
-            $orderItem->update($updateData);
-
-            return $orderItem;
-        });
-
-        return response()->json([
-            'message' => "Line item specifications updated successfully to Revision {$orderItem->revision_number}.",
-            'data'    => $orderItem->fresh(['specifiable', 'statusLookup'])
-        ], 200);
-    }
-
-    /**
      * Shared Validation Logic Engine
      */
     private function validateVideoSpecifications(OrderMenuItem $menuItem, ?array $specs): array
@@ -233,22 +73,194 @@ class OrderItemController extends Controller
     }
 
     /**
+     * Handles adding a polymorphic broadcast item row to a parent order.
+     * Route: POST /api/orders/{order}/items
+     */
+    public function store(Order $order, Request $request): JsonResponse
+    {
+        $baseValidator = Validator::make($request->all(), [
+            'order_menu_item_id' => 'required|integer|exists:order_menu_items,id',
+            'due_date'           => 'required|date_format:Y-m-d',
+            'specifications'     => 'required|array',
+        ]);
+
+        if ($baseValidator->fails()) {
+            return response()->json(['errors' => $baseValidator->errors()], 422);
+        }
+
+        $menuItem = OrderMenuItem::findOrFail($request->input('order_menu_item_id'));
+        if ((int)$menuItem->order_menu_category_id !== 1) {
+            return response()->json([
+                'errors' => ['order_menu_item_id' => ['The selected menu item does not belong to Category 1.']]
+            ], 422);
+        }
+
+        $specs = $request->input('specifications');
+        $customErrors = $this->validateVideoSpecifications($menuItem, $specs);
+        if (count($customErrors) > 0) {
+            return response()->json(['errors' => $customErrors], 422);
+        }
+
+        $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
+            // SEQUENTIAL LOOKUP: Detect the current sequence base line max height
+            $latestSpec = OrderItemBroadcastSpecification::orderBy('id', 'desc')->first();
+            $nextSequenceNumber = 1;
+
+            if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
+                // Isolates digits, converts string (e.g. "000042" -> 42), bumps up counter
+                $nextSequenceNumber = ((int) $matches[1]) + 1;
+            }
+
+            // Enforce strict 6-digit zero padding rule (e.g., GTC000001, GTC000184)
+            $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
+            $newIsci = "GTC{$paddedNumber}";
+
+            // Create concrete table details record
+            $broadcastSpec = OrderItemBroadcastSpecification::create([
+                'type'             => $specs['type'],
+                'cut'              => $specs['cut'],
+                'duration_seconds' => (int) $specs['duration_seconds'],
+                'language'         => $specs['language'],
+                'encoding'         => $specs['encoding'] ?? null,
+                'encoding_custom'  => $specs['encoding_custom'] ?? null,
+                'isci'             => $newIsci,
+            ]);
+
+            $itemTags = (array) ($menuItem->tags ?? []);
+
+            // Track into structural core order_items table log
+            return OrderItem::create([
+                'order_id'             => $order->id,
+                'order_menu_item_id'   => $menuItem->id,
+                'locked_price'         => $menuItem->default_price ?? '0.00',
+                'order_item_status_id' => 1, 
+                'due_date'             => $request->input('due_date'),
+                'specifiable_id'       => $broadcastSpec->id,
+                'specifiable_type'     => OrderItemBroadcastSpecification::class,
+                'audio_received'       => in_array('Audio', $itemTags, true) ? false : null,
+                'voice_over_received'  => in_array('Voice Over', $itemTags, true) ? false : null,
+                'art_received'         => in_array('Art', $itemTags, true) ? false : null,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Video delivery item successfully authorized and appended to cart.',
+            'data'    => $item->fresh(['specifiable', 'statusLookup'])
+        ], 201);
+    }
+
+    /**
+     * Executes an in-place update on the specification entity tables while auto-incrementing the R-counter.
+     * Route: PATCH /api/order-items/{orderItem}
+     */
+    public function update(OrderItem $orderItem, Request $request): JsonResponse
+    {
+        $menuItem = $orderItem->orderMenuItem;
+
+        // 1. Guard against modifications on already Cancelled items
+        if ($orderItem->statusLookup?->name === 'Cancelled' || (int)$orderItem->order_item_status_id === 5) {
+            return response()->json([
+                'errors' => ['specifications' => ['This line item has been cancelled and can no longer be modified.']]
+            ], 422);
+        }
+
+        $incomingSpecs = $request->input('specifications', []);
+        if ((int)$menuItem->order_menu_category_id === 1) {
+            $customErrors = $this->validateVideoSpecifications($menuItem, $incomingSpecs);
+            if (count($customErrors) > 0) {
+                return response()->json(['errors' => $customErrors], 422);
+            }
+        }
+
+        // 2. Execute history-engine split within database isolation boundaries
+        $processedItem = DB::transaction(function () use ($orderItem, $request, $incomingSpecs) {
+            $specification = $orderItem->specifiable;
+            
+            // Extract the clean numeric base anchor string (e.g., GTC000001R1 -> GTC000001)
+            $baseIsci = !empty($specification->isci) 
+                ? preg_replace('/R\d+$/', '', $specification->isci)
+                : 'GTC' . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
+
+            // CONDITION A: Item is "Still In Cart" -> Delete completely (No work tracking required)
+            if ($orderItem->statusLookup?->name === 'Still In Cart' || (int)$orderItem->order_item_status_id === 1) {
+                
+                $specification?->delete();
+                $orderItem->delete();
+
+                $newSpec = OrderItemBroadcastSpecification::create([
+                    'type'             => $incomingSpecs['type'] ?? ($specification->type ?? 'Generic'),
+                    'cut'              => $incomingSpecs['cut'] ?? ($specification->cut ?? 'Pre Sale'),
+                    'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : ($specification->duration_seconds ?? 30),
+                    'language'         => $incomingSpecs['language'] ?? ($specification->language ?? 'English'),
+                    'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : ($specification->encoding ?? null),
+                    'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : ($specification->encoding_custom ?? null),
+                    'isci'             => $baseIsci, // Remains R0 base code layout
+                ]);
+
+                return OrderItem::create([
+                    'order_id'             => $orderItem->order_id,
+                    'order_menu_item_id'   => $orderItem->order_menu_item_id,
+                    'locked_price'         => $orderItem->locked_price,
+                    'order_item_status_id' => 1, // Remains Still In Cart
+                    'due_date'             => $request->input('due_date', $orderItem->due_date),
+                    'specifiable_id'       => $newSpec->id,
+                    'specifiable_type'     => OrderItemBroadcastSpecification::class,
+                    'revision_number'      => 0,
+                    'audio_received'       => $request->input('audio_received', $orderItem->audio_received),
+                    'voice_over_received'  => $request->input('voice_over_received', $orderItem->voice_over_received),
+                    'art_received'         => $request->input('art_received', $orderItem->art_received),
+                ]);
+            }
+
+            // CONDITION B: Item is active -> Cancel old record, spin up cloned revision
+            $orderItem->update(['order_item_status_id' => 5]); // Status 5 = Cancelled
+
+            $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
+            $newIsci = "{$baseIsci}R{$nextRevision}";
+
+            $newSpec = OrderItemBroadcastSpecification::create([
+                'type'             => $incomingSpecs['type'] ?? $specification->type,
+                'cut'              => $incomingSpecs['cut'] ?? $specification->cut,
+                'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : $specification->duration_seconds,
+                'language'         => $incomingSpecs['language'] ?? $specification->language,
+                'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : $specification->encoding,
+                'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : $specification->encoding_custom,
+                'isci'             => $newIsci,
+            ]);
+
+            return OrderItem::create([
+                'order_id'             => $orderItem->order_id,
+                'order_menu_item_id'   => $orderItem->order_menu_item_id,
+                'locked_price'         => $orderItem->locked_price,
+                'order_item_status_id' => 2, // Resets to 'Unassigned' so production pipeline picks up new work
+                'due_date'             => $request->input('due_date', $orderItem->due_date),
+                'specifiable_id'       => $newSpec->id,
+                'specifiable_type'     => OrderItemBroadcastSpecification::class,
+                'revision_number'      => $nextRevision,
+                
+                // Carry forward production checkboxes or apply incoming patch selections
+                'audio_received'       => $request->input('audio_received', $orderItem->audio_received),
+                'voice_over_received'  => $request->input('voice_over_received', $orderItem->voice_over_received),
+                'art_received'         => $request->input('art_received', $orderItem->art_received),
+            ]);
+        });
+
+        return response()->json([
+            'message' => "Line item specifications updated successfully to Revision {$processedItem->revision_number}.",
+            'data'    => $processedItem->fresh(['specifiable', 'statusLookup'])
+        ], 200);
+    }
+
+    /**
      * Soft cancels an active row from a cart checkout view container node index.
      * Route: DELETE /api/order-items/{orderItem}
      */
     public function destroy(OrderItem $orderItem): JsonResponse
     {
-        $statusModelClass = $orderItem->statusLookup()->getRelated();
-        $cancelledStatus = $statusModelClass::where('name', 'Cancelled')->first();
-        $statusId = $cancelledStatus ? $cancelledStatus->id : 5; 
+        // If someone clicks the literal "Delete" button
+        $orderItem->specifiable?->delete();
+        $orderItem->delete();
 
-        $orderItem->update([
-            'order_item_status_id' => $statusId
-        ]);
-
-        return response()->json([
-            'message' => 'Line item successfully transitioned to Cancelled state.',
-            'data'    => $orderItem->fresh(['specifiable', 'statusLookup'])
-        ], 200);
+        return response()->json(['message' => 'Item removed from order completely.'], 200);
     }
 }
