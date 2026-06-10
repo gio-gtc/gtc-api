@@ -45,6 +45,19 @@ class OrderItemController extends Controller
         }
 
         $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
+            // 🚀 SEQUENTIAL LOOKUP: Detect the current sequence base line max height
+            $latestSpec = OrderItemBroadcastSpecification::orderBy('id', 'desc')->first();
+            $nextSequenceNumber = 1;
+
+            if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
+                // Isolates digits, converts string (e.g. "000042" -> 42), bumps up counter
+                $nextSequenceNumber = ((int) $matches[1]) + 1;
+            }
+
+            // Enforce strict 6-digit zero padding rule (e.g., GTC000001, GTC000184)
+            $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
+            $newIsci = "GTC{$paddedNumber}";
+
             // Create concrete table details record
             $broadcastSpec = OrderItemBroadcastSpecification::create([
                 'type'             => $specs['type'],
@@ -53,7 +66,7 @@ class OrderItemController extends Controller
                 'language'         => $specs['language'],
                 'encoding'         => $specs['encoding'] ?? null,
                 'encoding_custom'  => $specs['encoding_custom'] ?? null,
-                'isci'             => 'ISCI-' . strtoupper(Str::random(8)),
+                'isci'             => $newIsci,
             ]);
 
             $itemTags = (array) ($menuItem->tags ?? []);
@@ -87,6 +100,7 @@ class OrderItemController extends Controller
     {
         $menuItem = $orderItem->orderMenuItem;
 
+        // 1. Guard against modifications on Cancelled items
         if ($orderItem->statusLookup?->name === 'Cancelled' || (int)$orderItem->order_item_status_id === 5) {
             return response()->json([
                 'errors' => ['specifications' => ['This line item has been cancelled and can no longer be modified.']]
@@ -106,7 +120,22 @@ class OrderItemController extends Controller
             $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
 
             if ($specification) {
-                $newIsci = 'ISCI-' . strtoupper(Str::random(8)) . 'R' . $nextRevision;
+                // 🚀 PURE SEQUENTIAL EXTRACTION
+                if (!empty($specification->isci)) {
+                    // Strip the trailing revision identifier safely (e.g., GTC000042R1 -> GTC000042)
+                    $baseIsci = preg_replace('/R\d+$/', '', $specification->isci);
+                } else {
+                    // COLLISION-PROOF FALLBACK: If the column is blank, calculate the next sequential integer
+                    $latestSpec = OrderItemBroadcastSpecification::orderBy('id', 'desc')->first();
+                    $nextSequenceNumber = 1;
+
+                    if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
+                        $nextSequenceNumber = ((int) $matches[1]) + 1;
+                    }
+
+                    $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
+                    $baseIsci = "GTC{$paddedNumber}";
+                }
 
                 $specification->update([
                     'type'             => $incomingSpecs['type'] ?? $specification->type,
@@ -115,14 +144,27 @@ class OrderItemController extends Controller
                     'language'         => $incomingSpecs['language'] ?? $specification->language,
                     'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : $specification->encoding,
                     'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : $specification->encoding_custom,
-                    'isci'             => $newIsci,
+                    'isci'             => "{$baseIsci}R{$nextRevision}",
                 ]);
             }
 
-            $orderItem->update([
+            $updateData = [
                 'due_date'        => $request->input('due_date', $orderItem->due_date),
                 'revision_number' => $nextRevision,
-            ]);
+            ];
+
+            // Authoritative 3-state asset checkmarks
+            if ($request->has('audio_received')) {
+                $updateData['audio_received'] = $request->input('audio_received');
+            }
+            if ($request->has('voice_over_received')) {
+                $updateData['voice_over_received'] = $request->input('voice_over_received');
+            }
+            if ($request->has('art_received')) {
+                $updateData['art_received'] = $request->input('art_received');
+            }
+
+            $orderItem->update($updateData);
 
             return $orderItem;
         });

@@ -17,6 +17,8 @@ class MockOrderSeeder extends Seeder
 {
     public function run(): void
     {
+        $isciSequence = 1;
+
         OrderItem::query()->delete();
         OrderShowDate::query()->delete();
         Order::query()->delete();
@@ -42,6 +44,7 @@ class MockOrderSeeder extends Seeder
             'name'                   => 'Broadcast & Streaming Video Details',
             'slug'                   => 'broadcast-streaming-video-details',
             'default_price'          => 250.00,
+            'tags'                   => ['Audio', 'Voice Over'], // Ensure tags are defined
             'form_blueprint'         => [
                 'encodings' => ['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ'],
                 'types' => [
@@ -90,8 +93,15 @@ class MockOrderSeeder extends Seeder
 
             $orderItems = rand(4, 10);
             for ($k = 0; $k < $orderItems; $k++) {
-                $allocatedStatusId = array_pop($statusPool) ?? $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2;
+                $revisionNumber = rand(0, 2);
+                $paddedNumber = str_pad($isciSequence, 6, '0', STR_PAD_LEFT);
+                $baseIsci = "GTC{$paddedNumber}";
+                
+                $isciSequence++;
 
+                $finalIsci = $revisionNumber > 0 ? "{$baseIsci}R{$revisionNumber}" : $baseIsci;
+
+                $allocatedStatusId = array_pop($statusPool) ?? $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2;
                 $mediaType = fake()->randomElement(['Generic', 'International']);
                 
                 if ($mediaType === 'International') {
@@ -112,7 +122,7 @@ class MockOrderSeeder extends Seeder
                     'language'         => $language,
                     'encoding'         => fake()->randomElement(['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ']),
                     'encoding_custom'  => null,
-                    'isci'             => 'ISCI-' . strtoupper(Str::random(8)),
+                    'isci'             => $finalIsci,
                 ]);
 
                 // B. Save matching record to master index log mapping line
@@ -124,7 +134,10 @@ class MockOrderSeeder extends Seeder
                     'due_date'             => now()->addDays(rand(5, 25))->format('Y-m-d'),
                     'specifiable_id'       => $broadcastSpec->id,
                     'specifiable_type'     => OrderItemBroadcastSpecification::class,
-                    'revision_number'      => 0,
+                    'revision_number'      => $revisionNumber,
+                    'audio_received'       => false,
+                    'voice_over_received'  => false,
+                    'art_received'         => null,
                 ]);
             }
         }
