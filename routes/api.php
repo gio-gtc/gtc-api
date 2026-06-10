@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
+use App\Http\Controllers\AssigneeController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
@@ -75,6 +76,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
     Route::patch('order-items/{orderItem}', [OrderItemController::class, 'update'])->name('order-items.update');
     Route::delete('order-items/{orderItem}', [OrderItemController::class, 'destroy'])->name('order-items.destroy');
+    Route::apiResource('order-items.assignees', AssigneeController::class)
+        ->only(['index', 'store', 'destroy']);
     Route::get('/order-catalog-menu', [OrderMenuController::class, 'index'])->name('order-catalog.index');
     Route::get('/reference-data', function () {
         return response()->json([
