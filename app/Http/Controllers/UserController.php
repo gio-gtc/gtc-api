@@ -36,19 +36,25 @@ class UserController extends Controller
     }
 
     /**
-     * Fetch all external clients for selection pickers and dashboard views
+     * Fetch external clients (Supports full list, search, and order existence filtering)
+     * GET /api/clients
      */
     public function clientIndex(Request $request): JsonResponse
     {
-        // 1. Initialize the base query for external organizations (non-GTC staff)
+        // 1. Initialize the base query for external clients
         $query = User::where('organisation_id', '!=', 1)
             ->select('id', 'first_name', 'last_name', 'email', 'avatar', 'organisation_id');
 
-        // 2. Check if a search query is actively provided
+        // 2. NEW: Filter out clients who don't have any orders
+        // This assumes your User model has an 'orders' relationship defined
+        if ($request->boolean('has_orders')) {
+            $query->whereHas('orders');
+        }
+
+        // 3. Keep your existing type-ahead search logic intact
         if ($request->filled('q')) {
             $searchTerm = $request->input('q');
 
-            // Enforce the boundary constraint ONLY when a search is executing
             if (mb_strlen($searchTerm) < 2) {
                 return response()->json([
                     'message' => 'The search term must be at least 2 characters.',
@@ -56,15 +62,13 @@ class UserController extends Controller
                 ], 422);
             }
 
-            // Apply search filters cleanly across names and emails
             $query->where(function ($subQuery) use ($searchTerm) {
                 $subQuery->where('first_name', 'like', "%{$searchTerm}%")
-                    ->orWhere('last_name', 'like', "%{$searchTerm}%")
-                    ->orWhere('email', 'like', "%{$searchTerm}%");
+                        ->orWhere('last_name', 'like', "%{$searchTerm}%")
+                        ->orWhere('email', 'like', "%{$searchTerm}%");
             });
         }
 
-        // 3. Execute the payload compilation
         $clients = $query->orderBy('first_name', 'asc')->get();
 
         return response()->json([

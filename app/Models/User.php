@@ -46,6 +46,11 @@ class User extends Authenticatable
         return $this->belongsTo(Organisation::class);
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'client_id');
+    }
+
     /**
      * Send the password reset notification.
      *
