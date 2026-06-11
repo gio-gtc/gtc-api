@@ -15,7 +15,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Broadcast & Streaming Video Details',
                     'price' => 1200.00,
-                    'tags' => ['Audio', 'Voice Over'],
+                    'tags' => ['Audio'],
                     'blueprint' => [
                         'encodings' => [
                             "H264-MP4 (Online or Venue)", 
@@ -60,7 +60,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Social Platform Video Details',
                     'price' => 350.00,
-                    'tags' => ['Audio', 'Voice Over'],
+                    'tags' => ['Audio'],
                     'blueprint' => [
                         'types' => ['Social - 16:9', 'FB/IG Story', 'TikTok', 'Social Square', 'Social - 4:5'],
                         'cuts' => ['Pre Sale', 'On Sale Now', 'Evergreen', 'Sign Up Now'],
@@ -75,7 +75,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Radio Details',
                     'price' => 300.00,
-                    'tags' => ['Voice Over'],
+                    'tags' => [],
                     'blueprint' => [
                         'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
                         'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of'],

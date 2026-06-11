@@ -44,7 +44,7 @@ class MockOrderSeeder extends Seeder
             'name'                   => 'Broadcast & Streaming Video Details',
             'slug'                   => 'broadcast-streaming-video-details',
             'default_price'          => 250.00,
-            'tags'                   => ['Audio', 'Voice Over'], // Ensure tags are defined
+            'tags'                   => ['Audio'],
             'form_blueprint'         => [
                 'encodings' => ['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ'],
                 'types' => [
@@ -135,9 +135,6 @@ class MockOrderSeeder extends Seeder
                     'specifiable_id'       => $broadcastSpec->id,
                     'specifiable_type'     => OrderItemBroadcastSpecification::class,
                     'revision_number'      => $revisionNumber,
-                    'audio_received'       => false,
-                    'voice_over_received'  => false,
-                    'art_received'         => null,
                 ]);
             }
         }

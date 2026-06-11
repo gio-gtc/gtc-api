@@ -12,7 +12,18 @@ class OrderItem extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'order_id',
+        'order_menu_item_id',
+        'order_item_status_id',
+        'locked_price',
+        'due_date',
+        'root_order_item_id',
+        'revision_number',
+        'supersedes_order_item_id',
+        'invoice_line_id',
+        'asset_url',
+    ];
 
     protected $with = ['specifiable', 'statusLookup'];
 

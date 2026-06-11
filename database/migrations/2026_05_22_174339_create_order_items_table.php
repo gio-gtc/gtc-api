@@ -20,6 +20,8 @@ return new class extends Migration
             $table->integer('revision_number')->default(1);
             $table->unsignedBigInteger('supersedes_order_item_id')->nullable();
             $table->unsignedBigInteger('invoice_line_id')->nullable()->index();
+            $table->string('asset_url')->nullable(); 
+
             $table->timestamps();
         });
 
@@ -27,7 +29,7 @@ return new class extends Migration
             $table->foreign('order_item_status_id')
                 ->references('id')
                 ->on('order_item_statuses')
-                ->onDelete('restrict'); // Protects dictionary records from accidental deletion
+                ->onDelete('restrict');
         });
     }
 

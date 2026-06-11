@@ -137,9 +137,6 @@ class OrderItemController extends Controller
                 'due_date'             => $request->input('due_date'),
                 'specifiable_id'       => $broadcastSpec->id,
                 'specifiable_type'     => OrderItemBroadcastSpecification::class,
-                'audio_received'       => in_array('Audio', $itemTags, true) ? false : null,
-                'voice_over_received'  => in_array('Voice Over', $itemTags, true) ? false : null,
-                'art_received'         => in_array('Art', $itemTags, true) ? false : null,
             ]);
         });
 
@@ -206,9 +203,6 @@ class OrderItemController extends Controller
                     'specifiable_id'       => $newSpec->id,
                     'specifiable_type'     => OrderItemBroadcastSpecification::class,
                     'revision_number'      => 0,
-                    'audio_received'       => $request->input('audio_received', $orderItem->audio_received),
-                    'voice_over_received'  => $request->input('voice_over_received', $orderItem->voice_over_received),
-                    'art_received'         => $request->input('art_received', $orderItem->art_received),
                 ]);
             }
 
@@ -237,11 +231,6 @@ class OrderItemController extends Controller
                 'specifiable_id'       => $newSpec->id,
                 'specifiable_type'     => OrderItemBroadcastSpecification::class,
                 'revision_number'      => $nextRevision,
-                
-                // Carry forward production checkboxes or apply incoming patch selections
-                'audio_received'       => $request->input('audio_received', $orderItem->audio_received),
-                'voice_over_received'  => $request->input('voice_over_received', $orderItem->voice_over_received),
-                'art_received'         => $request->input('art_received', $orderItem->art_received),
             ]);
         });
 

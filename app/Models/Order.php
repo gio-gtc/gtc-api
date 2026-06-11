@@ -171,9 +171,6 @@ class Order extends Model
             'revision_number',
             'specifiable_id',
             'specifiable_type',
-            'audio_received',
-            'voice_over_received',
-            'art_received'   
         ]);
     }
 
@@ -195,67 +192,67 @@ class Order extends Model
      */
     public function syncStatusAndTags(): void
     {
-        // 1. Pull the exact names directly from the order_item_statuses lookup table
+        // Hop through order_menu_items to reach order_menu_categories cleanly
         $items = $this->orderItems()
+            ->join('order_menu_items', 'order_items.order_menu_item_id', '=', 'order_menu_items.id')
+            ->join('order_menu_categories', 'order_menu_items.order_menu_category_id', '=', 'order_menu_categories.id')
             ->join('order_item_statuses', 'order_items.order_item_status_id', '=', 'order_item_statuses.id')
-            ->select('order_item_statuses.name as status_name', 'order_items.type')
+            ->select(
+                'order_item_statuses.name as status_name', 
+                'order_menu_categories.id as category_id',
+                'order_items.asset_url'
+            )
             ->get();
 
         if ($items->isEmpty()) {
             return;
         }
 
-        // Arrays now capture exact database strings (e.g., "In Production", "Unassigned")
-        $itemStatuses = $items->pluck('status_name')->toArray();
-        $itemTypes = $items->pluck('type')->toArray();
-
         $computedStatuses = [];
+        $missingAudio = false;
+        $missingArt = false;
 
-        // Rule 1: In Progress 
-        // Triggers if any item is "In Production" or "Revision Requested"
-        if (in_array('In Production', $itemStatuses) || in_array('Revision Requested', $itemStatuses)) {
-            $computedStatuses[] = 'In Progress';
+        foreach ($items as $item) {
+            $status = $item->status_name;
+            $catId = $item->category_id;
+            $hasAsset = !empty($item->asset_url);
+
+            // Rules 1-5 (In Progress, Client Review, New Order, Complete, Cancelled)
+            if ($status === 'In Production' || $status === 'Revision Requested') {
+                $computedStatuses[] = 'In Progress';
+            }
+            if (!in_array('In Progress', $computedStatuses) && $status === 'Client Review') {
+                $computedStatuses[] = 'Client Review';
+            }
+            if ($status === 'Unassigned' || $status === 'Still In Cart') {
+                $computedStatuses[] = 'New Order';
+            }
+            if ($status === 'Complete') {
+                $computedStatuses[] = 'Complete';
+            }
+            if ($status === 'Cancelled') {
+                $computedStatuses[] = 'Cancelled';
+            }
+
+            // Tag Processing logic
+            if ($status === 'Cancelled' || $status === 'Still In Cart') {
+                continue; 
+            }
+
+            if (!$hasAsset) {
+                if (in_array($catId, [1, 2, 3])) { $missingAudio = true; }
+                if ($catId === 4)                  { $missingArt = true; }
+            }
         }
 
-        // Rule 2: Client Review 
-        // Triggers only if nothing is active, and at least one item is "Client Review"
-        if (!in_array('In Progress', $computedStatuses) && in_array('Client Review', $itemStatuses)) {
-            $computedStatuses[] = 'Client Review';
-        }
-
-        // Rule 3: New Order 
-        // Triggers if an item is "Unassigned" (or "Still In Cart")
-        if (in_array('Unassigned', $itemStatuses) || in_array('Still In Cart', $itemStatuses)) {
-            $computedStatuses[] = 'New Order';
-        }
-
-        // Rule 4: Complete 
-        // Triggers if even a single non-cancelled item is "Complete"
-        if (in_array('Complete', $itemStatuses)) {
-            $computedStatuses[] = 'Complete';
-        }
-
-        // Rule 5: Cancelled 
-        // Triggers if an item in the order has been "Cancelled"
-        if (in_array('Cancelled', $itemStatuses)) {
-            $computedStatuses[] = 'Cancelled';
-        }
-
-        // Collapse duplicates down to unique Title Case status names
+        // Sync relationships and save
         $uniqueStatuses = array_values(array_unique($computedStatuses));
-
-        // 2. Exact Match DB Lookup
-        // Because the strings in $uniqueStatuses match your order_statuses table exactly,
-        // this query will successfully resolve the correct IDs.
         $statusIds = OrderStatus::whereIn('name', $uniqueStatuses)->pluck('id');
-
-        // 3. Sync the Pivot Table
         $this->statuses()->sync($statusIds);
 
-        // 4. Handle Discipline Tags
         $computedTags = [];
-        if (in_array('Audio', $itemTypes)) { $computedTags[] = 'Audio'; }
-        if (in_array('Art', $itemTypes)) { $computedTags[] = 'Art'; }
+        if ($missingAudio) { $computedTags[] = 'Audio'; }
+        if ($missingArt)   { $computedTags[] = 'Art'; }
 
         if (method_exists($this, 'syncTags')) {
             $this->syncTags($computedTags);

@@ -251,10 +251,11 @@ class OrderController extends Controller
                 'client.organisation:id,name,country_id',
                 'client.organisation.country:id,code',
                 'showDates:id,order_id,show_date',
-                'orderItems:id,order_id,order_menu_item_id,order_item_status_id,locked_price,due_date,revision_number,specifiable_id,specifiable_type,audio_received,voice_over_received,art_received',
+                'orderItems:id,order_id,order_menu_item_id,order_item_status_id,locked_price,due_date,revision_number,specifiable_id,specifiable_type,asset_url',
                 'orderItems.statusLookup:id,name,order_status_id',
                 'orderItems.statusLookup.orderStatus:id,name',
                 'orderItems.assignees:id,first_name,last_name,email,avatar',
+                'statuses:id,name'
             ]);
 
         // Apply the "My Tasks" row pruning strategy
@@ -264,7 +265,6 @@ class OrderController extends Controller
             });
         }
 
-        // Keep your other existing advanced filter evaluations intact...
         if ($request->filled('client_ids')) {
             $ordersQuery->whereIn('ordered_by_id', $request->client_ids);
         }
@@ -281,17 +281,24 @@ class OrderController extends Controller
             });
         }
 
-                if ($request->filled('asset_tags')) {
+        if ($request->filled('asset_tags')) {
             $ordersQuery->whereHas('orderItems', function ($q) use ($request) {
-                $q->where(function ($jsonQuery) use ($request) {
+                $q->whereNull('asset_url')
+                ->whereHas('statusLookup', function ($statusQuery) {
+                    $statusQuery->whereNotIn('name', ['Cancelled', 'Still In Cart']);
+                })
+                ->where(function ($subQuery) use ($request) {
                     foreach ($request->asset_tags as $tag) {
                         $normalizedTag = strtolower($tag);
+                        
                         if ($normalizedTag === 'audio') {
-                            $jsonQuery->orWhere('audio_received', false);
-                        } elseif ($normalizedTag === 'voice over') {
-                            $jsonQuery->orWhere('voice_over_received', false);
+                            $subQuery->orWhereHas('orderMenuItem', function ($menuQuery) {
+                                $menuQuery->whereIn('order_menu_category_id', [1, 2, 3]);
+                            });
                         } elseif ($normalizedTag === 'art' || $normalizedTag === 'key art') {
-                            $jsonQuery->orWhere('art_received', false);
+                            $subQuery->orWhereHas('orderMenuItem', function ($menuQuery) {
+                                $menuQuery->whereIn('order_menu_category_id', [4]);
+                            });
                         }
                     }
                 });

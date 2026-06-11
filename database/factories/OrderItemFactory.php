@@ -29,7 +29,7 @@ class OrderItemFactory extends Factory
         $awaiting = [];
         if (in_array($assignedStatusName, ['Still In Cart', 'Unassigned', 'In Production'])) {
             if ($this->faker->boolean(40)) {
-                $possibleBlockers = ['Voice Over', 'Audio', 'Art'];
+                $possibleBlockers = ['Audio', 'Art'];
                 shuffle($possibleBlockers);
                 $awaiting = array_slice($possibleBlockers, 0, rand(1, 3));
             }

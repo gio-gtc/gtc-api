@@ -19,17 +19,16 @@ class TourController extends Controller
         $tourQuery = Tour::select(['id', 'name', 'created_at', 'updated_at']);
 
         // GLOBAL SERVER-SIDE ADVANCED FILTERS + SIDEBAR VIEWS LAYER
-        if ($request->hasAny(['client_ids', 'assignee_ids', 'statuses', 'is_international', 'tags', 'filter'])) {
+        if ($request->hasAny(['client_ids', 'assignee_ids', 'statuses', 'is_international', 'tags', 'asset_tags', 'filter'])) {
             $tourQuery->whereHas('orders', function ($query) use ($request, $user) {
                 
                 // Intercept "My Tasks" sidebar view request
                 if ($request->query('filter') === 'my-tasks') {
                     $query->whereHas('orderItems.assignees', function ($q) use ($user) {
-                        $q->where('users.id', $user->id); // Restricts to the logged-in user's ID
+                        $q->where('users.id', $user->id); 
                     });
                 }
 
-                // Keep your other existing multi-select filter blocks intact below...
                 if ($request->filled('client_ids')) {
                     $query->whereIn('ordered_by_id', $request->client_ids);
                 }
@@ -46,17 +45,25 @@ class TourController extends Controller
                     });
                 }
 
+                // Dynamic Blocker Tag Filter Engine (Purged old _received columns)
                 if ($request->filled('asset_tags')) {
                     $query->whereHas('orderItems', function ($q) use ($request) {
-                        $q->where(function ($jsonQuery) use ($request) {
+                        $q->whereNull('asset_url')
+                        ->whereHas('statusLookup', function ($statusQuery) {
+                            $statusQuery->whereNotIn('name', ['Cancelled', 'Still In Cart']);
+                        })
+                        ->where(function ($subQuery) use ($request) {
                             foreach ($request->asset_tags as $tag) {
                                 $normalizedTag = strtolower($tag);
+                                
                                 if ($normalizedTag === 'audio') {
-                                    $jsonQuery->orWhere('audio_received', false);
-                                } elseif ($normalizedTag === 'voice over') {
-                                    $jsonQuery->orWhere('voice_over_received', false);
+                                    $subQuery->orWhereHas('orderMenuItem', function ($menuQuery) {
+                                        $menuQuery->whereIn('order_menu_category_id', [1, 2, 3]);
+                                    });
                                 } elseif ($normalizedTag === 'art' || $normalizedTag === 'key art') {
-                                    $jsonQuery->orWhere('art_received', false);
+                                    $subQuery->orWhereHas('orderMenuItem', function ($menuQuery) {
+                                        $menuQuery->whereIn('order_menu_category_id', [4]);
+                                    });
                                 }
                             }
                         });
