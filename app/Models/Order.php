@@ -35,6 +35,10 @@ class Order extends Model
         'is_international'
     ];
 
+    protected $casts = [
+        'statuses' => 'array', 
+    ];
+
     /**
      * Boot logic to handle lifecycle event hooks.
      */
@@ -100,7 +104,7 @@ class Order extends Model
 
         // Precedence Waterfall Matrix
         $priorityWaterfall = [
-            'Canceled',
+            'Cancelled',
             'Client Review',
             'In Progress',
             'New Order',
@@ -174,10 +178,87 @@ class Order extends Model
     }
 
     /**
-     * Maps the order container to the newly built custom 'order_status' pivot table
+     * Relationship to your order_statuses lookup table via the pivot
      */
     public function statuses(): BelongsToMany
     {
-        return $this->belongsToMany(OrderStatus::class);
+        return $this->belongsToMany(
+            OrderStatus::class,
+            'order_order_status',
+            'order_id',
+            'order_status_id'
+        );
+    }
+
+    /**
+     * Synchronize the Order status pivot table and discipline tags dynamically
+     */
+    public function syncStatusAndTags(): void
+    {
+        // 1. Pull the exact names directly from the order_item_statuses lookup table
+        $items = $this->orderItems()
+            ->join('order_item_statuses', 'order_items.order_item_status_id', '=', 'order_item_statuses.id')
+            ->select('order_item_statuses.name as status_name', 'order_items.type')
+            ->get();
+
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        // Arrays now capture exact database strings (e.g., "In Production", "Unassigned")
+        $itemStatuses = $items->pluck('status_name')->toArray();
+        $itemTypes = $items->pluck('type')->toArray();
+
+        $computedStatuses = [];
+
+        // Rule 1: In Progress 
+        // Triggers if any item is "In Production" or "Revision Requested"
+        if (in_array('In Production', $itemStatuses) || in_array('Revision Requested', $itemStatuses)) {
+            $computedStatuses[] = 'In Progress';
+        }
+
+        // Rule 2: Client Review 
+        // Triggers only if nothing is active, and at least one item is "Client Review"
+        if (!in_array('In Progress', $computedStatuses) && in_array('Client Review', $itemStatuses)) {
+            $computedStatuses[] = 'Client Review';
+        }
+
+        // Rule 3: New Order 
+        // Triggers if an item is "Unassigned" (or "Still In Cart")
+        if (in_array('Unassigned', $itemStatuses) || in_array('Still In Cart', $itemStatuses)) {
+            $computedStatuses[] = 'New Order';
+        }
+
+        // Rule 4: Complete 
+        // Triggers if even a single non-cancelled item is "Complete"
+        if (in_array('Complete', $itemStatuses)) {
+            $computedStatuses[] = 'Complete';
+        }
+
+        // Rule 5: Cancelled 
+        // Triggers if an item in the order has been "Cancelled"
+        if (in_array('Cancelled', $itemStatuses)) {
+            $computedStatuses[] = 'Cancelled';
+        }
+
+        // Collapse duplicates down to unique Title Case status names
+        $uniqueStatuses = array_values(array_unique($computedStatuses));
+
+        // 2. Exact Match DB Lookup
+        // Because the strings in $uniqueStatuses match your order_statuses table exactly,
+        // this query will successfully resolve the correct IDs.
+        $statusIds = OrderStatus::whereIn('name', $uniqueStatuses)->pluck('id');
+
+        // 3. Sync the Pivot Table
+        $this->statuses()->sync($statusIds);
+
+        // 4. Handle Discipline Tags
+        $computedTags = [];
+        if (in_array('Audio', $itemTypes)) { $computedTags[] = 'Audio'; }
+        if (in_array('Art', $itemTypes)) { $computedTags[] = 'Art'; }
+
+        if (method_exists($this, 'syncTags')) {
+            $this->syncTags($computedTags);
+        }
     }
 }

@@ -20,7 +20,7 @@ class OrderStatusSeeder extends Seeder
         $inProgress   = OrderStatus::create(['name' => 'In Progress']);
         $clientReview = OrderStatus::create(['name' => 'Client Review']);
         $complete     = OrderStatus::create(['name' => 'Complete']);
-        $canceled     = OrderStatus::create(['name' => 'Canceled']);
+        $cancelled     = OrderStatus::create(['name' => 'Cancelled']);
 
         // Map individual child Order Item statuses directly to parent order rules
         OrderItemStatus::create(['name' => 'Still In Cart',    'order_status_id' => null]);
@@ -28,6 +28,6 @@ class OrderStatusSeeder extends Seeder
         OrderItemStatus::create(['name' => 'In Production',    'order_status_id' => $inProgress->id]);
         OrderItemStatus::create(['name' => 'Client Review',    'order_status_id' => $clientReview->id]);
         OrderItemStatus::create(['name' => 'Out For Delivery', 'order_status_id' => $complete->id]);
-        OrderItemStatus::create(['name' => 'Canceled',         'order_status_id' => $canceled->id]);
+        OrderItemStatus::create(['name' => 'Cancelled',         'order_status_id' => $cancelled->id]);
     }
 }

@@ -63,11 +63,11 @@ class MockOrderSeeder extends Seeder
         ]);
 
         $itemStatuses = OrderItemStatus::all();
-        $canceledStatus = $itemStatuses->whereIn('name', ['Canceled', 'Cancelled'])->first();
-        $canceledId = $canceledStatus ? $canceledStatus->id : 5;
+        $cancelledStatus = $itemStatuses->whereIn('name', ['Cancelled', 'Cancelled'])->first();
+        $cancelledId = $cancelledStatus ? $cancelledStatus->id : 5;
 
         $statusPool = array_merge(
-            array_fill(0, 3, $canceledId),
+            array_fill(0, 3, $cancelledId),
             array_fill(0, 7, $itemStatuses->where('name', 'Still In Cart')->first()?->id ?? 1),
             array_fill(0, 7, $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2),
             array_fill(0, 8, $itemStatuses->where('name', 'In Production')->first()?->id ?? 3),

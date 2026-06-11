@@ -14,7 +14,7 @@ class OrderFactory extends Factory
 
     public function definition(): array
     {
-        $statuses = ['New Order', 'In Progress', 'Canceled', 'Complete', 'Client Review'];
+        $statuses = ['New Order', 'In Progress', 'Cancelled', 'Complete', 'Client Review'];
 
         return [
             'tour_id' => Tour::inRandomOrder()->first()?->id ?? Tour::factory(),
