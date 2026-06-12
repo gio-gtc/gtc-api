@@ -29,10 +29,9 @@ class Order extends Model
 
     // Automatically inject these properties into all outgoing JSON serialization blocks
     protected $appends = [
-        'is_awaiting_assets',
         'item_statuses',
-        'status',
-        'is_international'
+        'is_international',
+        'tags',
     ];
 
     protected $casts = [
@@ -131,7 +130,7 @@ class Order extends Model
 
         return $this->orderItems
             ->map(function ($item) {
-                return $item->statusLookup?->orderStatus?->name;
+                return $item->statusLookup?->name;
             })
             ->filter()
             ->unique()
@@ -187,21 +186,50 @@ class Order extends Model
         );
     }
 
+    public function getTagsAttribute(): array
+    {
+        if (!$this->relationLoaded('orderItems')) {
+            return [];
+        }
+
+        $tags = [];
+        $missingAudio = false;
+        $missingArt = false;
+
+        foreach ($this->orderItems as $item) {
+            $statusName = $item->statusLookup?->name;
+            
+            if (in_array($statusName, ['Cancelled', 'Still In Cart'])) {
+                continue;
+            }
+
+            if (empty($item->asset_url)) {
+                $categoryId = $item->orderMenuItem?->order_menu_category_id;
+                
+                if (in_array($categoryId, [1, 2, 3])) {
+                    $missingAudio = true;
+                }
+                if ($categoryId === 4) {
+                    $missingArt = true;
+                }
+            }
+        }
+
+        if ($missingAudio) { $tags[] = 'Audio'; }
+        if ($missingArt)   { $tags[] = 'Art'; }
+
+        return $tags;
+    }
+
     /**
      * Synchronize the Order status pivot table and discipline tags dynamically
      */
+
     public function syncStatusAndTags(): void
     {
-        // Hop through order_menu_items to reach order_menu_categories cleanly
         $items = $this->orderItems()
-            ->join('order_menu_items', 'order_items.order_menu_item_id', '=', 'order_menu_items.id')
-            ->join('order_menu_categories', 'order_menu_items.order_menu_category_id', '=', 'order_menu_categories.id')
             ->join('order_item_statuses', 'order_items.order_item_status_id', '=', 'order_item_statuses.id')
-            ->select(
-                'order_item_statuses.name as status_name', 
-                'order_menu_categories.id as category_id',
-                'order_items.asset_url'
-            )
+            ->select('order_item_statuses.name as status_name')
             ->get();
 
         if ($items->isEmpty()) {
@@ -209,53 +237,86 @@ class Order extends Model
         }
 
         $computedStatuses = [];
-        $missingAudio = false;
-        $missingArt = false;
-
         foreach ($items as $item) {
             $status = $item->status_name;
-            $catId = $item->category_id;
-            $hasAsset = !empty($item->asset_url);
-
-            // Rules 1-5 (In Progress, Client Review, New Order, Complete, Cancelled)
-            if ($status === 'In Production' || $status === 'Revision Requested') {
-                $computedStatuses[] = 'In Progress';
-            }
-            if (!in_array('In Progress', $computedStatuses) && $status === 'Client Review') {
-                $computedStatuses[] = 'Client Review';
-            }
-            if ($status === 'Unassigned' || $status === 'Still In Cart') {
-                $computedStatuses[] = 'New Order';
-            }
-            if ($status === 'Complete') {
-                $computedStatuses[] = 'Complete';
-            }
-            if ($status === 'Cancelled') {
-                $computedStatuses[] = 'Cancelled';
-            }
-
-            // Tag Processing logic
-            if ($status === 'Cancelled' || $status === 'Still In Cart') {
-                continue; 
-            }
-
-            if (!$hasAsset) {
-                if (in_array($catId, [1, 2, 3])) { $missingAudio = true; }
-                if ($catId === 4)                  { $missingArt = true; }
-            }
+            if ($status === 'In Production' || $status === 'Revision Requested') { $computedStatuses[] = 'In Progress'; }
+            if (!in_array('In Progress', $computedStatuses) && $status === 'Client Review') { $computedStatuses[] = 'Client Review'; }
+            if ($status === 'Unassigned' || $status === 'Still In Cart') { $computedStatuses[] = 'New Order'; }
+            if ($status === 'Complete') { $computedStatuses[] = 'Complete'; }
+            if ($status === 'Cancelled') { $computedStatuses[] = 'Cancelled'; }
         }
 
-        // Sync relationships and save
         $uniqueStatuses = array_values(array_unique($computedStatuses));
         $statusIds = OrderStatus::whereIn('name', $uniqueStatuses)->pluck('id');
+        
         $this->statuses()->sync($statusIds);
-
-        $computedTags = [];
-        if ($missingAudio) { $computedTags[] = 'Audio'; }
-        if ($missingArt)   { $computedTags[] = 'Art'; }
-
-        if (method_exists($this, 'syncTags')) {
-            $this->syncTags($computedTags);
-        }
     }
+    // public function syncStatusAndTags(): void
+    // {
+    //     // Hop through order_menu_items to reach order_menu_categories cleanly
+    //     $items = $this->orderItems()
+    //         ->join('order_menu_items', 'order_items.order_menu_item_id', '=', 'order_menu_items.id')
+    //         ->join('order_menu_categories', 'order_menu_items.order_menu_category_id', '=', 'order_menu_categories.id')
+    //         ->join('order_item_statuses', 'order_items.order_item_status_id', '=', 'order_item_statuses.id')
+    //         ->select(
+    //             'order_item_statuses.name as status_name', 
+    //             'order_menu_categories.id as category_id',
+    //             'order_items.asset_url'
+    //         )
+    //         ->get();
+
+    //     if ($items->isEmpty()) {
+    //         return;
+    //     }
+
+    //     $computedStatuses = [];
+    //     $missingAudio = false;
+    //     $missingArt = false;
+
+    //     foreach ($items as $item) {
+    //         $status = $item->status_name;
+    //         $catId = $item->category_id;
+    //         $hasAsset = !empty($item->asset_url);
+
+    //         // Rules 1-5 (In Progress, Client Review, New Order, Complete, Cancelled)
+    //         if ($status === 'In Production' || $status === 'Revision Requested') {
+    //             $computedStatuses[] = 'In Progress';
+    //         }
+    //         if (!in_array('In Progress', $computedStatuses) && $status === 'Client Review') {
+    //             $computedStatuses[] = 'Client Review';
+    //         }
+    //         if ($status === 'Unassigned' || $status === 'Still In Cart') {
+    //             $computedStatuses[] = 'New Order';
+    //         }
+    //         if ($status === 'Complete') {
+    //             $computedStatuses[] = 'Complete';
+    //         }
+    //         if ($status === 'Cancelled') {
+    //             $computedStatuses[] = 'Cancelled';
+    //         }
+
+    //         // Tag Processing logic
+    //         if ($status === 'Cancelled' || $status === 'Still In Cart') {
+    //             continue; 
+    //         }
+
+    //         if (!$hasAsset) {
+    //             if (in_array($catId, [1, 2, 3])) { $missingAudio = true; }
+    //             if ($catId === 4)                  { $missingArt = true; }
+    //         }
+    //     }
+
+    //     // Sync relationships and save
+    //     $uniqueStatuses = array_values(array_unique($computedStatuses));
+    //     $statusIds = OrderStatus::whereIn('name', $uniqueStatuses)->pluck('id');
+    //     $this->statuses()->sync($statusIds);
+
+    //     $computedTags = [];
+    //     if ($missingAudio) { $computedTags[] = 'Audio'; }
+    //     if ($missingArt)   { $computedTags[] = 'Art'; }
+
+    //     if (method_exists($this, 'syncTags')) {
+    //         $this->syncTags($computedTags);
+    //     }
+    // }
 }

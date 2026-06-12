@@ -24,13 +24,15 @@ class OrderController extends Controller
         $ordersQuery = Order::query()
             ->with([
                 'tour:id,name',
-                'venue:id,name,city,state',
-                'client:id,first_name,last_name,email,organisation_id',
-                'client.organisation:id,name,country_id', 
-                'client.organisation.country:id,code', 
-                'showDates:id,order_id,show_date',
-                'orderItems:id,order_id,order_item_status_id',
-                'orderItems.assignees:id,first_name,last_name,email,avatar'
+            'venue:id,name,city,state',
+            'client:id,first_name,last_name,email,organisation_id',
+            'client.organisation:id,name,country_id', 
+            'client.organisation.country:id,code', 
+            'showDates:id,order_id,show_date',
+            'orderItems:id,order_id,order_item_status_id,order_menu_item_id,asset_url',
+            'orderItems.statusLookup:id,name',
+            'orderItems.orderMenuItem:id,order_menu_category_id',
+            'orderItems.assignees:id,first_name,last_name,email,avatar'
             ]);
 
         // 2. High-Speed Filtering Hook (Example: Filtering via relational status matrix)

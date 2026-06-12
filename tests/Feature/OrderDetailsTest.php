@@ -98,7 +98,6 @@ class OrderDetailsTest extends TestCase
                     'uuid',
                     'tour_id',
                     'venue_id',
-                    'is_awaiting_assets',
                     'item_statuses',
                     'venue',
                     'tour',

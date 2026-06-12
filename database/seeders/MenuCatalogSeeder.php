@@ -75,7 +75,7 @@ class MenuCatalogSeeder extends Seeder
                 [
                     'name' => 'Radio Details',
                     'price' => 300.00,
-                    'tags' => [],
+                    'tags' => ['Audio'],
                     'blueprint' => [
                         'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
                         'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of'],

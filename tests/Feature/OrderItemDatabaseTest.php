@@ -84,7 +84,6 @@ class OrderItemDatabaseTest extends TestCase
 
         $order->refresh();
         $this->assertContains('New Order', $order->item_statuses);
-        $this->assertTrue($order->is_awaiting_assets); 
 
         // 2. Append an In Production item -> Header array must contain BOTH states simultaneously
         $item2 = OrderItem::factory()->create([
@@ -104,7 +103,5 @@ class OrderItemDatabaseTest extends TestCase
         $this->assertContains('Complete', $order->item_statuses);
         $this->assertNotContains('New Order', $order->item_statuses);
         $this->assertNotContains('In Progress', $order->item_statuses);
-        
-        $this->assertFalse($order->is_awaiting_assets);
     }
 }
