@@ -72,6 +72,7 @@ class MockOrderSeeder extends Seeder
             array_fill(0, 7, $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2),
             array_fill(0, 8, $itemStatuses->where('name', 'In Production')->first()?->id ?? 3),
             array_fill(0, 7, $itemStatuses->where('name', 'Client Review')->first()?->id ?? 4),
+            array_fill(0, 7, $itemStatuses->where('name', 'Revision Request')->first()?->id ?? 5),
             array_fill(0, 8, $itemStatuses->where('name', 'Out For Delivery')->first()?->id ?? 6)
         );
         shuffle($statusPool);

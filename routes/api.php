@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
     Route::patch('order-items/{orderItem}', [OrderItemController::class, 'update'])->name('order-items.update');
     Route::delete('order-items/{orderItem}', [OrderItemController::class, 'destroy'])->name('order-items.destroy');
+    Route::post('order-items/bulk-update', [OrderItemController::class, 'bulkUpdate'])->name('order-tems.bulk-update');
     Route::apiResource('order-items.assignees', AssigneeController::class)
         ->only(['index', 'store', 'destroy']);
     Route::get('/order-catalog-menu', [OrderMenuController::class, 'index'])->name('order-catalog.index');

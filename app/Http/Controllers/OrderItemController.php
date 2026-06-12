@@ -102,20 +102,16 @@ class OrderItemController extends Controller
         }
 
         $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
-            // SEQUENTIAL LOOKUP: Detect the current sequence base line max height
             $latestSpec = OrderItemBroadcastSpecification::orderBy('id', 'desc')->first();
             $nextSequenceNumber = 1;
 
             if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
-                // Isolates digits, converts string (e.g. "000042" -> 42), bumps up counter
                 $nextSequenceNumber = ((int) $matches[1]) + 1;
             }
 
-            // Enforce strict 6-digit zero padding rule (e.g., GTC000001, GTC000184)
             $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
             $newIsci = "GTC{$paddedNumber}";
 
-            // Create concrete table details record
             $broadcastSpec = OrderItemBroadcastSpecification::create([
                 'type'             => $specs['type'],
                 'cut'              => $specs['cut'],
@@ -126,9 +122,6 @@ class OrderItemController extends Controller
                 'isci'             => $newIsci,
             ]);
 
-            $itemTags = (array) ($menuItem->tags ?? []);
-
-            // Track into structural core order_items table log
             return OrderItem::create([
                 'order_id'             => $order->id,
                 'order_menu_item_id'   => $menuItem->id,
@@ -154,7 +147,6 @@ class OrderItemController extends Controller
     {
         $menuItem = $orderItem->orderMenuItem;
 
-        // 1. Guard against modifications on already Cancelled items
         if ($orderItem->statusLookup?->name === 'Cancelled' || (int)$orderItem->order_item_status_id === 5) {
             return response()->json([
                 'errors' => ['specifications' => ['This line item has been cancelled and can no longer be modified.']]
@@ -169,16 +161,13 @@ class OrderItemController extends Controller
             }
         }
 
-        // 2. Execute history-engine split within database isolation boundaries
         $processedItem = DB::transaction(function () use ($orderItem, $request, $incomingSpecs) {
             $specification = $orderItem->specifiable;
             
-            // Extract the clean numeric base anchor string (e.g., GTC000001R1 -> GTC000001)
             $baseIsci = !empty($specification->isci) 
                 ? preg_replace('/R\d+$/', '', $specification->isci)
                 : 'GTC' . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
 
-            // CONDITION A: Item is "Still In Cart" -> Delete completely (No work tracking required)
             if ($orderItem->statusLookup?->name === 'Still In Cart' || (int)$orderItem->order_item_status_id === 1) {
                 
                 $specification?->delete();
@@ -191,14 +180,14 @@ class OrderItemController extends Controller
                     'language'         => $incomingSpecs['language'] ?? ($specification->language ?? 'English'),
                     'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : ($specification->encoding ?? null),
                     'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : ($specification->encoding_custom ?? null),
-                    'isci'             => $baseIsci, // Remains R0 base code layout
+                    'isci'             => $baseIsci, 
                 ]);
 
                 return OrderItem::create([
                     'order_id'             => $orderItem->order_id,
                     'order_menu_item_id'   => $orderItem->order_menu_item_id,
                     'locked_price'         => $orderItem->locked_price,
-                    'order_item_status_id' => 1, // Remains Still In Cart
+                    'order_item_status_id' => 1, 
                     'due_date'             => $request->input('due_date', $orderItem->due_date),
                     'specifiable_id'       => $newSpec->id,
                     'specifiable_type'     => OrderItemBroadcastSpecification::class,
@@ -206,8 +195,7 @@ class OrderItemController extends Controller
                 ]);
             }
 
-            // CONDITION B: Item is active -> Cancel old record, spin up cloned revision
-            $orderItem->update(['order_item_status_id' => 5]); // Status 5 = Cancelled
+            $orderItem->update(['order_item_status_id' => 5]); 
 
             $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
             $newIsci = "{$baseIsci}R{$nextRevision}";
@@ -226,7 +214,7 @@ class OrderItemController extends Controller
                 'order_id'             => $orderItem->order_id,
                 'order_menu_item_id'   => $orderItem->order_menu_item_id,
                 'locked_price'         => $orderItem->locked_price,
-                'order_item_status_id' => 2, // Resets to 'Unassigned' so production pipeline picks up new work
+                'order_item_status_id' => 2, 
                 'due_date'             => $request->input('due_date', $orderItem->due_date),
                 'specifiable_id'       => $newSpec->id,
                 'specifiable_type'     => OrderItemBroadcastSpecification::class,
@@ -246,10 +234,116 @@ class OrderItemController extends Controller
      */
     public function destroy(OrderItem $orderItem): JsonResponse
     {
-        // If someone clicks the literal "Delete" button
         $orderItem->specifiable?->delete();
         $orderItem->delete();
 
         return response()->json(['message' => 'Item removed from order completely.'], 200);
+    }
+
+    /**
+     * ⚡ NEW: High-Speed Polymorphic Bulk Update Strategy
+     * Route: POST /api/order-items/bulk-update
+     */
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        // 1. Core structural array rules evaluation
+        $validator = Validator::make($request->all(), [
+            'order_item_ids'         => 'required|array',
+            'order_item_ids.*'       => 'exists:order_items,id',
+            'due_date'               => 'sometimes|nullable|date_format:Y-m-d',
+            'order_item_status_id'   => 'sometimes|exists:order_item_statuses,id',
+            'assignee_ids'           => 'sometimes|array',
+            'assignee_ids.*'         => 'exists:users,id',
+            'specifications'         => 'sometimes|array',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $itemIds = $request->input('order_item_ids');
+
+        return DB::transaction(function () use ($request, $itemIds) {
+            // Gather baseline metadata to identify the unique parent order boundaries and spec mappings
+            $itemsMeta = OrderItem::whereIn('id', $itemIds)
+                ->select(['id', 'order_id', 'specifiable_id', 'specifiable_type'])
+                ->get();
+
+            if ($itemsMeta->isEmpty()) {
+                return response()->json(['errors' => ['order_item_ids' => ['No valid order items found for update.']]], 422);
+            }
+
+            // Isolate unique parent IDs to trigger single status loops later
+            $affectedParentOrderIds = $itemsMeta->pluck('order_id')->unique()->toArray();
+
+            // --- STRATEGY A: DIRECT TRACKING UPDATES (DIRTY ARRAYS ONLY) ---
+            $itemTableUpdates = [];
+            
+            if ($request->has('due_date')) {
+                $itemTableUpdates['due_date'] = $request->input('due_date');
+            }
+            if ($request->has('order_item_status_id')) {
+                $itemTableUpdates['order_item_status_id'] = $request->input('order_item_status_id');
+            }
+
+            if (!empty($itemTableUpdates)) {
+                OrderItem::whereIn('id', $itemIds)->update($itemTableUpdates);
+            }
+
+            // --- STRATEGY B: MANY-TO-MANY TEAM PIVOT CLEAN SWAP ---
+            if ($request->has('assignee_ids')) {
+                // Clear old bindings only for the selected subset of item IDs
+                DB::table('order_item_assignee')->whereIn('order_item_id', $itemIds)->delete();
+
+                $assigneeIds = $request->input('assignee_ids', []);
+                if (!empty($assigneeIds)) {
+                    $bulkPivotRows = [];
+                    $timestamp = now();
+
+                    foreach ($itemIds as $itemId) {
+                        foreach ($assigneeIds as $userId) {
+                            $bulkPivotRows[] = [
+                                'order_item_id' => $itemId,
+                                'user_id'       => $userId,
+                                'created_at'    => $timestamp,
+                                'updated_at'    => $timestamp,
+                            ];
+                        }
+                    }
+                    // Raw high-performance DB chunk insertion
+                    DB::table('order_item_assignee')->insert($bulkPivotRows);
+                }
+            }
+
+            // --- STRATEGY C: POLYMORPHIC SYSTEM ENGINE FOR ADVANCED SPECS ---
+            $incomingSpecs = $request->input('specifications');
+            if (!empty($incomingSpecs) && is_array($incomingSpecs)) {
+                
+                // Homogeneous mapping rule: we analyze the first element to know which model is targeted
+                $firstItem = $itemsMeta->first();
+                $specModelClass = $firstItem->specifiable_type;
+                $specIds = $itemsMeta->pluck('specifiable_id')->filter()->toArray();
+
+                if ($specModelClass && !empty($specIds)) {
+                    // Instantly sweeps across the active polymorphic table (e.g., Radio, Broadcast, Social)
+                    $specModelClass::whereIn('id', $specIds)->update($incomingSpecs);
+                }
+            }
+
+            // --- STRATEGY D: PARENT LEDGER AGGREGATION CALCULATOR ---
+            // Trigger order status/tag calculation exactly once per affected order
+            $parentOrders = Order::whereIn('id', $affectedParentOrderIds)->get();
+            foreach ($parentOrders as $order) {
+                $order->syncStatusAndTags();
+            }
+
+            return response()->json([
+                'message' => 'Selected order line items batch-updated successfully.',
+                'meta' => [
+                    'updated_items_count' => count($itemIds),
+                    'affected_orders'     => $affectedParentOrderIds
+                ]
+            ], 200);
+        });
     }
 }
