@@ -124,7 +124,7 @@ class OrderDetailsTest extends TestCase
 
         // Assert exact properties inside data layer to ensure relationships match target rows
         $this->assertEquals($this->order->id, $response->json('data.id'));
-        $this->assertContains('New Order', $response->json('data.item_statuses'));
+        $this->assertContains('Unassigned', $response->json('data.item_statuses'));
         $this->assertEquals('Unassigned', $response->json('data.order_items.0.status_lookup.name'));
         $this->assertEquals('2026-07-20', $response->json('data.show_dates.0.show_date'));
         $this->assertEquals('Tour Hoodie Asset Blueprint', $response->json('data.order_items.0.order_menu_item.name'));

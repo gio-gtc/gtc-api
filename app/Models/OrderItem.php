@@ -95,4 +95,15 @@ class OrderItem extends Model
         return $this->belongsToMany(User::class, 'order_item_assignee', 'order_item_id', 'user_id')
             ->withTimestamps();
     }
+
+    public function revisionInstructions()
+    {
+        return $this->hasOne(OrderItemRevision::class, 'new_order_item_id');
+    }
+
+    // If this is the OLD cancelled item, see why it was rejected:
+    public function rejectionReason()
+    {
+        return $this->hasOne(OrderItemRevision::class, 'old_order_item_id');
+    }
 }

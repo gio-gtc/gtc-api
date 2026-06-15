@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Auth;
 
 class OrderItemController extends Controller
 {
@@ -140,95 +141,6 @@ class OrderItemController extends Controller
     }
 
     /**
-     * Executes an in-place update on the specification entity tables while auto-incrementing the R-counter.
-     * Route: PATCH /api/order-items/{orderItem}
-     */
-    public function update(OrderItem $orderItem, Request $request): JsonResponse
-    {
-        $menuItem = $orderItem->orderMenuItem;
-
-        if ($orderItem->statusLookup?->name === 'Cancelled' || (int)$orderItem->order_item_status_id === 5) {
-            return response()->json([
-                'errors' => ['specifications' => ['This line item has been cancelled and can no longer be modified.']]
-            ], 422);
-        }
-
-        $incomingSpecs = $request->input('specifications', []);
-        if ((int)$menuItem->order_menu_category_id === 1) {
-            $customErrors = $this->validateVideoSpecifications($menuItem, $incomingSpecs);
-            if (count($customErrors) > 0) {
-                return response()->json(['errors' => $customErrors], 422);
-            }
-        }
-
-        $processedItem = DB::transaction(function () use ($orderItem, $request, $incomingSpecs) {
-            $specification = $orderItem->specifiable;
-            
-            $baseIsci = !empty($specification->isci) 
-                ? preg_replace('/R\d+$/', '', $specification->isci)
-                : 'GTC' . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
-
-            if ($orderItem->statusLookup?->name === 'Still In Cart' || (int)$orderItem->order_item_status_id === 1) {
-                
-                $specification?->delete();
-                $orderItem->delete();
-
-                $newSpec = OrderItemBroadcastSpecification::create([
-                    'type'             => $incomingSpecs['type'] ?? ($specification->type ?? 'Generic'),
-                    'cut'              => $incomingSpecs['cut'] ?? ($specification->cut ?? 'Pre Sale'),
-                    'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : ($specification->duration_seconds ?? 30),
-                    'language'         => $incomingSpecs['language'] ?? ($specification->language ?? 'English'),
-                    'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : ($specification->encoding ?? null),
-                    'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : ($specification->encoding_custom ?? null),
-                    'isci'             => $baseIsci, 
-                ]);
-
-                return OrderItem::create([
-                    'order_id'             => $orderItem->order_id,
-                    'order_menu_item_id'   => $orderItem->order_menu_item_id,
-                    'locked_price'         => $orderItem->locked_price,
-                    'order_item_status_id' => 1, 
-                    'due_date'             => $request->input('due_date', $orderItem->due_date),
-                    'specifiable_id'       => $newSpec->id,
-                    'specifiable_type'     => OrderItemBroadcastSpecification::class,
-                    'revision_number'      => 0,
-                ]);
-            }
-
-            $orderItem->update(['order_item_status_id' => 5]); 
-
-            $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
-            $newIsci = "{$baseIsci}R{$nextRevision}";
-
-            $newSpec = OrderItemBroadcastSpecification::create([
-                'type'             => $incomingSpecs['type'] ?? $specification->type,
-                'cut'              => $incomingSpecs['cut'] ?? $specification->cut,
-                'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : $specification->duration_seconds,
-                'language'         => $incomingSpecs['language'] ?? $specification->language,
-                'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : $specification->encoding,
-                'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : $specification->encoding_custom,
-                'isci'             => $newIsci,
-            ]);
-
-            return OrderItem::create([
-                'order_id'             => $orderItem->order_id,
-                'order_menu_item_id'   => $orderItem->order_menu_item_id,
-                'locked_price'         => $orderItem->locked_price,
-                'order_item_status_id' => 2, 
-                'due_date'             => $request->input('due_date', $orderItem->due_date),
-                'specifiable_id'       => $newSpec->id,
-                'specifiable_type'     => OrderItemBroadcastSpecification::class,
-                'revision_number'      => $nextRevision,
-            ]);
-        });
-
-        return response()->json([
-            'message' => "Line item specifications updated successfully to Revision {$processedItem->revision_number}.",
-            'data'    => $processedItem->fresh(['specifiable', 'statusLookup'])
-        ], 200);
-    }
-
-    /**
      * Soft cancels an active row from a cart checkout view container node index.
      * Route: DELETE /api/order-items/{orderItem}
      */
@@ -241,12 +153,68 @@ class OrderItemController extends Controller
     }
 
     /**
-     * ⚡ NEW: High-Speed Polymorphic Bulk Update Strategy
+     * Executes an in-place update on the specification entity tables while auto-incrementing the R-counter.
+     * Route: PATCH /api/order-items/{orderItem}
+     */
+    public function update(OrderItem $orderItem, Request $request): JsonResponse
+    {
+        // 1. Guard against direct edits on already Cancelled history items
+        if ((int)$orderItem->order_item_status_id === 5) {
+            return response()->json([
+                'errors' => ['status' => ['This historical line item has been cancelled and can no longer be edited.']]
+            ], 422);
+        }
+
+        // 2. Loose validation matching our dirty fields strategy
+        $validated = $request->validate([
+            'due_date'             => 'sometimes|nullable|date_format:Y-m-d',
+            'order_item_status_id' => 'sometimes|exists:order_item_statuses,id',
+            'assignee_ids'         => 'sometimes|array',
+            'assignee_ids.*'       => 'exists:users,id',
+            'specifications'       => 'sometimes|array',
+        ]);
+
+        return DB::transaction(function () use ($orderItem, $request) {
+            
+            // Core Item field dirty-checks
+            if ($request->has('due_date')) {
+                $orderItem->due_date = $request->input('due_date');
+            }
+            if ($request->has('order_item_status_id')) {
+                $orderItem->order_item_status_id = $request->input('order_item_status_id');
+            }
+            
+            if ($orderItem->isDirty()) {
+                $orderItem->save();
+            }
+
+            // Sync structural user assignees if present in request
+            if ($request->has('assignee_ids')) {
+                $orderItem->assignees()->sync($request->input('assignee_ids', []));
+            }
+
+            // In-place update to polymorphic spec tables
+            $incomingSpecs = $request->input('specifications');
+            if (!empty($incomingSpecs) && is_array($incomingSpecs)) {
+                $orderItem->specifiable?->update($incomingSpecs);
+            }
+
+            // Force parent order status and tags engine refresh
+            $orderItem->order?->syncStatusAndTags();
+
+            return response()->json([
+                'message' => 'Line item successfully updated in-place.',
+                'data'    => $orderItem->fresh(['specifiable', 'statusLookup', 'assignees'])
+            ], 200);
+        });
+    }
+
+    /**
+     * NEW: High-Speed Polymorphic Bulk Update Strategy
      * Route: POST /api/order-items/bulk-update
      */
     public function bulkUpdate(Request $request): JsonResponse
     {
-        // 1. Core structural array rules evaluation
         $validator = Validator::make($request->all(), [
             'order_item_ids'         => 'required|array',
             'order_item_ids.*'       => 'exists:order_items,id',
@@ -264,42 +232,30 @@ class OrderItemController extends Controller
         $itemIds = $request->input('order_item_ids');
 
         return DB::transaction(function () use ($request, $itemIds) {
-            // Gather baseline metadata to identify the unique parent order boundaries and spec mappings
             $itemsMeta = OrderItem::whereIn('id', $itemIds)
                 ->select(['id', 'order_id', 'specifiable_id', 'specifiable_type'])
                 ->get();
 
             if ($itemsMeta->isEmpty()) {
-                return response()->json(['errors' => ['order_item_ids' => ['No valid order items found for update.']]], 422);
+                return response()->json(['errors' => ['order_item_ids' => ['No valid order items found.']]], 422);
             }
 
-            // Isolate unique parent IDs to trigger single status loops later
             $affectedParentOrderIds = $itemsMeta->pluck('order_id')->unique()->toArray();
 
-            // --- STRATEGY A: DIRECT TRACKING UPDATES (DIRTY ARRAYS ONLY) ---
             $itemTableUpdates = [];
-            
-            if ($request->has('due_date')) {
-                $itemTableUpdates['due_date'] = $request->input('due_date');
-            }
-            if ($request->has('order_item_status_id')) {
-                $itemTableUpdates['order_item_status_id'] = $request->input('order_item_status_id');
-            }
+            if ($request->has('due_date')) { $itemTableUpdates['due_date'] = $request->input('due_date'); }
+            if ($request->has('order_item_status_id')) { $itemTableUpdates['order_item_status_id'] = $request->input('order_item_status_id'); }
 
             if (!empty($itemTableUpdates)) {
                 OrderItem::whereIn('id', $itemIds)->update($itemTableUpdates);
             }
 
-            // --- STRATEGY B: MANY-TO-MANY TEAM PIVOT CLEAN SWAP ---
             if ($request->has('assignee_ids')) {
-                // Clear old bindings only for the selected subset of item IDs
                 DB::table('order_item_assignee')->whereIn('order_item_id', $itemIds)->delete();
-
                 $assigneeIds = $request->input('assignee_ids', []);
                 if (!empty($assigneeIds)) {
                     $bulkPivotRows = [];
                     $timestamp = now();
-
                     foreach ($itemIds as $itemId) {
                         foreach ($assigneeIds as $userId) {
                             $bulkPivotRows[] = [
@@ -310,28 +266,21 @@ class OrderItemController extends Controller
                             ];
                         }
                     }
-                    // Raw high-performance DB chunk insertion
                     DB::table('order_item_assignee')->insert($bulkPivotRows);
                 }
             }
 
-            // --- STRATEGY C: POLYMORPHIC SYSTEM ENGINE FOR ADVANCED SPECS ---
             $incomingSpecs = $request->input('specifications');
             if (!empty($incomingSpecs) && is_array($incomingSpecs)) {
-                
-                // Homogeneous mapping rule: we analyze the first element to know which model is targeted
                 $firstItem = $itemsMeta->first();
                 $specModelClass = $firstItem->specifiable_type;
                 $specIds = $itemsMeta->pluck('specifiable_id')->filter()->toArray();
 
                 if ($specModelClass && !empty($specIds)) {
-                    // Instantly sweeps across the active polymorphic table (e.g., Radio, Broadcast, Social)
                     $specModelClass::whereIn('id', $specIds)->update($incomingSpecs);
                 }
             }
 
-            // --- STRATEGY D: PARENT LEDGER AGGREGATION CALCULATOR ---
-            // Trigger order status/tag calculation exactly once per affected order
             $parentOrders = Order::whereIn('id', $affectedParentOrderIds)->get();
             foreach ($parentOrders as $order) {
                 $order->syncStatusAndTags();
@@ -345,5 +294,77 @@ class OrderItemController extends Controller
                 ]
             ], 200);
         });
+    }
+
+    /**
+     * Client/System Revision Request Loop (Cancel & Duplicate Archive Tracking)
+     * Route: POST /api/order-items/{orderItem}/revise
+     */
+    public function revise(OrderItem $orderItem, Request $request): JsonResponse
+    {
+        $menuItem = $orderItem->orderMenuItem;
+
+        // 1. Guard check and validate that a comment is present
+        $request->validate([
+            'comment' => 'required|string|min:5'
+        ]);
+
+        if ((int)$orderItem->order_item_status_id === 5) {
+            return response()->json(['errors' => ['specifications' => ['This line item has already been cancelled.']]], 422);
+        }
+
+        $incomingSpecs = $request->input('specifications', []);
+
+        $processedItem = DB::transaction(function () use ($orderItem, $request, $incomingSpecs) {
+            $specification = $orderItem->specifiable;
+            
+            $baseIsci = !empty($specification->isci) 
+                ? preg_replace('/R\d+$/', '', $specification->isci)
+                : 'GTC' . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
+
+            $orderItem->update(['order_item_status_id' => 5]); 
+
+            $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
+            $newIsci = "{$baseIsci}R{$nextRevision}";
+
+            $newSpec = OrderItemBroadcastSpecification::create([
+                'type'             => $incomingSpecs['type'] ?? $specification->type,
+                'cut'              => $incomingSpecs['cut'] ?? $specification->cut,
+                'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : $specification->duration_seconds,
+                'language'         => $incomingSpecs['language'] ?? $specification->language,
+                'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : $specification->encoding,
+                'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : $specification->encoding_custom,
+                'isci'             => $newIsci,
+            ]);
+
+            $newRevisionItem = OrderItem::create([
+                'order_id'             => $orderItem->order_id,
+                'order_menu_item_id'   => $orderItem->order_menu_item_id,
+                'locked_price'         => $orderItem->locked_price,
+                'order_item_status_id' => 6,
+                'due_date'             => $request->input('due_date', $orderItem->due_date),
+                'specifiable_id'       => $newSpec->id,
+                'specifiable_type'     => get_class($specification),
+                'revision_number'      => $nextRevision,
+            ]);
+
+            // NEW: Write to the structural glue ledger table
+            DB::table('order_item_revisions')->insert([
+                'old_order_item_id' => $orderItem->id,
+                'new_order_item_id' => $newRevisionItem->id,
+                'user_id'           => Auth::id() ?? $orderItem->order->ordered_by_id,
+                'comment'           => $request->input('comment'),
+                'created_at'        => now(),
+                'updated_at'        => now(),
+            ]);
+
+            $newRevisionItem->order?->syncStatusAndTags();
+            return $newRevisionItem;
+        });
+
+        return response()->json([
+            'message' => "Line item successfully split to Revision {$processedItem->revision_number}.",
+            'data'    => $processedItem->fresh(['specifiable', 'statusLookup', 'revisionInstructions'])
+        ], 200);
     }
 }

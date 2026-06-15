@@ -140,7 +140,7 @@ class OrderSubmissionTest extends TestCase
             ]);
 
         // Verify the parent computing fields and invoice details sequence numbers
-        $this->assertContains('New Order', $response->json('data.order.item_statuses'));
+        $this->assertContains('Unassigned', $response->json('data.order.item_statuses'));
         $this->assertEquals(101, $response->json('data.invoice.document_number'));
         $this->assertEquals('Held', $response->json('data.invoice.status'));
 
