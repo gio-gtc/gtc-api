@@ -159,7 +159,7 @@ class OrderItemController extends Controller
     public function update(OrderItem $orderItem, Request $request): JsonResponse
     {
         // 1. Guard against direct edits on already Cancelled history items
-        if ((int)$orderItem->order_item_status_id === 5) {
+        if ((int)$orderItem->order_item_status_id == 5) {
             return response()->json([
                 'errors' => ['status' => ['This historical line item has been cancelled and can no longer be edited.']]
             ], 422);
@@ -304,51 +304,56 @@ class OrderItemController extends Controller
     {
         $menuItem = $orderItem->orderMenuItem;
 
-        // 1. Guard check and validate that a comment is present
+        // 1. Enforce validation rules
         $request->validate([
             'comment' => 'required|string|min:5'
         ]);
 
-        if ((int)$orderItem->order_item_status_id === 5) {
+        // Guard against trying to revise an already Cancelled row (Status 7)
+        if ((int)$orderItem->order_item_status_id == 7) {
             return response()->json(['errors' => ['specifications' => ['This line item has already been cancelled.']]], 422);
         }
 
-        $incomingSpecs = $request->input('specifications', []);
-
-        $processedItem = DB::transaction(function () use ($orderItem, $request, $incomingSpecs) {
-            $specification = $orderItem->specifiable;
+        $processedItem = DB::transaction(function () use ($orderItem, $request) {
             
-            $baseIsci = !empty($specification->isci) 
-                ? preg_replace('/R\d+$/', '', $specification->isci)
-                : 'GTC' . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
+            // 1. FETCH & CLONE THE SPECIFICATION DYNAMICALLY (Works for all media tables!)
+            $oldSpecification = $orderItem->specifiable;
+            $newSpecification = $oldSpecification->replicate(); // Clones all unique schema columns automatically
+            
+            // Handle ISCI version generation loops if the column exists on this specific media spec table
+            if (isset($newSpecification->isci) && !empty($oldSpecification->isci)) {
+                $baseIsci = preg_replace('/R\d+$/', '', $oldSpecification->isci);
+                $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
+                $newSpecification->isci = "{$baseIsci}R{$nextRevision}";
+            }
+            $newSpecification->save();
 
-            $orderItem->update(['order_item_status_id' => 5]); 
+            // Move the old historical row directly to Status 7 (Cancelled)
+            $orderItem->order_item_status_id = 7; 
+            $orderItem->save();
 
-            $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
-            $newIsci = "{$baseIsci}R{$nextRevision}";
-
-            $newSpec = OrderItemBroadcastSpecification::create([
-                'type'             => $incomingSpecs['type'] ?? $specification->type,
-                'cut'              => $incomingSpecs['cut'] ?? $specification->cut,
-                'duration_seconds' => isset($incomingSpecs['duration_seconds']) ? (int)$incomingSpecs['duration_seconds'] : $specification->duration_seconds,
-                'language'         => $incomingSpecs['language'] ?? $specification->language,
-                'encoding'         => array_key_exists('encoding', $incomingSpecs) ? $incomingSpecs['encoding'] : $specification->encoding,
-                'encoding_custom'  => array_key_exists('encoding_custom', $incomingSpecs) ? $incomingSpecs['encoding_custom'] : $specification->encoding_custom,
-                'isci'             => $newIsci,
-            ]);
-
+            // 2. SPAWN THE NEW DUPLICATE REVISION RECORD
+            $nextRevisionNumber = ((int) ($orderItem->revision_number ?? 0)) + 1;
+            
             $newRevisionItem = OrderItem::create([
                 'order_id'             => $orderItem->order_id,
                 'order_menu_item_id'   => $orderItem->order_menu_item_id,
                 'locked_price'         => $orderItem->locked_price,
-                'order_item_status_id' => 6,
-                'due_date'             => $request->input('due_date', $orderItem->due_date),
-                'specifiable_id'       => $newSpec->id,
-                'specifiable_type'     => get_class($specification),
-                'revision_number'      => $nextRevision,
+                'order_item_status_id' => 5,
+                'due_date'             => $orderItem->due_date,
+                'specifiable_id'       => $newSpecification->id,
+                'specifiable_type'     => $orderItem->specifiable_type,
+                'revision_number'      => $nextRevisionNumber,
+                'asset_url'            => null,
             ]);
 
-            // NEW: Write to the structural glue ledger table
+            // 3. DUPLICATE PIVOT TABLE CONNECTIONS (Assignees)
+            $oldAssigneeIds = $orderItem->assignees()->pluck('users.id')->toArray();
+            if (!empty($oldAssigneeIds)) {
+                $newRevisionItem->assignees()->sync($oldAssigneeIds);
+            }
+
+            // 4. WRITE LEDGER PAIRING ENTRY
             DB::table('order_item_revisions')->insert([
                 'old_order_item_id' => $orderItem->id,
                 'new_order_item_id' => $newRevisionItem->id,
@@ -358,13 +363,15 @@ class OrderItemController extends Controller
                 'updated_at'        => now(),
             ]);
 
+            // Force automatic recalculations on parent order badges/tags
             $newRevisionItem->order?->syncStatusAndTags();
+
             return $newRevisionItem;
         });
 
         return response()->json([
             'message' => "Line item successfully split to Revision {$processedItem->revision_number}.",
-            'data'    => $processedItem->fresh(['specifiable', 'statusLookup', 'revisionInstructions'])
+            'data'    => $processedItem->fresh(['specifiable', 'statusLookup', 'assignees', 'revisionInstructions'])
         ], 200);
     }
 }

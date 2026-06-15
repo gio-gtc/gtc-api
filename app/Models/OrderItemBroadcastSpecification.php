@@ -12,7 +12,15 @@ class OrderItemBroadcastSpecification extends Model
 
     protected $table = 'order_item_broadcast_specifications';
 
-    protected $guarded = [];
+    protected $fillable = [
+        'type',
+        'cut',
+        'duration_seconds',
+        'language',
+        'encoding',
+        'encoding_custom',
+        'isci',
+    ];
 
     /**
      * Inverse polymorphic mapping relationship back to the master item ledger.

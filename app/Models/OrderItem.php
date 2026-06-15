@@ -19,6 +19,8 @@ class OrderItem extends Model
         'locked_price',
         'due_date',
         'root_order_item_id',
+        'specifiable_id',
+        'specifiable_type',
         'revision_number',
         'supersedes_order_item_id',
         'invoice_line_id',
