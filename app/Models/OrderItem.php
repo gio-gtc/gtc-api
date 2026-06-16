@@ -24,7 +24,7 @@ class OrderItem extends Model
         'revision_number',
         'supersedes_order_item_id',
         'invoice_line_id',
-        'asset_url',
+        'asset_path',
     ];
 
     protected $with = ['specifiable', 'statusLookup'];

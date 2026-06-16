@@ -48,7 +48,7 @@ class TourController extends Controller
                 // Dynamic Blocker Tag Filter Engine (Purged old _received columns)
                 if ($request->filled('asset_tags')) {
                     $query->whereHas('orderItems', function ($q) use ($request) {
-                        $q->whereNull('asset_url')
+                        $q->whereNull('asset_path')
                         ->whereHas('statusLookup', function ($statusQuery) {
                             $statusQuery->whereNotIn('name', ['Cancelled', 'Still In Cart']);
                         })

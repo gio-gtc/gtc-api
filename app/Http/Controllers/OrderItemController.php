@@ -340,7 +340,7 @@ class OrderItemController extends Controller
                 'specifiable_id'       => $newSpecification->id,
                 'specifiable_type'     => $orderItem->specifiable_type,
                 'revision_number'      => $nextRevisionNumber,
-                'asset_url'            => null,
+                'asset_path'            => null,
             ]);
 
             // 3. DUPLICATE PIVOT TABLE CONNECTIONS (Assignees)

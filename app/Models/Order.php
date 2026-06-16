@@ -203,7 +203,7 @@ class Order extends Model
                 continue;
             }
 
-            if (empty($item->asset_url)) {
+            if (empty($item->asset_path)) {
                 $categoryId = $item->orderMenuItem?->order_menu_category_id;
                 
                 if (in_array($categoryId, [1, 2, 3])) {

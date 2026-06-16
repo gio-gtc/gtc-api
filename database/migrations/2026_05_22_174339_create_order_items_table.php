@@ -20,7 +20,7 @@ return new class extends Migration
             $table->integer('revision_number')->default(1);
             $table->unsignedBigInteger('supersedes_order_item_id')->nullable();
             $table->unsignedBigInteger('invoice_line_id')->nullable()->index();
-            $table->string('asset_url')->nullable(); 
+            $table->string('asset_path')->nullable(); 
 
             $table->timestamps();
         });

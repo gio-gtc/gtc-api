@@ -29,7 +29,7 @@ class OrderController extends Controller
                 'client.organisation:id,name,country_id', 
                 'client.organisation.country:id,code', 
                 'showDates:id,order_id,show_date',
-                'orderItems:id,order_id,order_item_status_id,order_menu_item_id,asset_url',
+                'orderItems:id,order_id,order_item_status_id,order_menu_item_id,asset_path',
                 'orderItems.statusLookup:id,name',
                 'orderItems.orderMenuItem:id,order_menu_category_id',
                 'orderItems.assignees:id,first_name,last_name,email,avatar',
@@ -254,7 +254,7 @@ class OrderController extends Controller
                 'client.organisation:id,name,country_id',
                 'client.organisation.country:id,code',
                 'showDates:id,order_id,show_date',
-                'orderItems:id,order_id,order_menu_item_id,order_item_status_id,locked_price,due_date,revision_number,specifiable_id,specifiable_type,asset_url',
+                'orderItems:id,order_id,order_menu_item_id,order_item_status_id,locked_price,due_date,revision_number,specifiable_id,specifiable_type,asset_path',
                 'orderItems.statusLookup:id,name,order_status_id',
                 'orderItems.statusLookup.orderStatus:id,name',
                 'orderItems.assignees:id,first_name,last_name,email,avatar',
@@ -286,7 +286,7 @@ class OrderController extends Controller
 
         if ($request->filled('asset_tags')) {
             $ordersQuery->whereHas('orderItems', function ($q) use ($request) {
-                $q->whereNull('asset_url')
+                $q->whereNull('asset_path')
                 ->whereHas('statusLookup', function ($statusQuery) {
                     $statusQuery->whereNotIn('name', ['Cancelled', 'Still In Cart']);
                 })
