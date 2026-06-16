@@ -61,9 +61,10 @@ class OrderItemController extends Controller
             }
         }
 
-        $encoding = Arr::get($specs, 'encoding');
-        if (blank($encoding)) {
-            $customErrors['specifications.encoding'] = ['The encoding field is required.'];
+        $encoding = Arr::get($specs, 'encoding'); // This will now come in as an array
+
+        if (!is_array($encoding) || empty($encoding)) {
+            $customErrors['specifications.encoding'] = ['At least one encoding profile must be selected.'];
         }
 
         return $customErrors;

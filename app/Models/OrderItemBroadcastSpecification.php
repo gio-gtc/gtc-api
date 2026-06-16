@@ -12,6 +12,10 @@ class OrderItemBroadcastSpecification extends Model
 
     protected $table = 'order_item_broadcast_specifications';
 
+    protected $casts = [
+        'encoding' => 'array',
+    ];
+
     protected $fillable = [
         'type',
         'cut',

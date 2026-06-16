@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('cut')->nullable();
             $table->string('duration_seconds')->nullable(); 
             $table->string('language')->nullable();
-            $table->string('encoding')->nullable(); 
+            $table->json('encoding')->nullable(); 
             $table->string('isci')->nullable();
             $table->timestamps();
         });
