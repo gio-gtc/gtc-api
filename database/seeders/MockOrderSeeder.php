@@ -122,7 +122,6 @@ class MockOrderSeeder extends Seeder
                     'duration_seconds' => $duration,
                     'language'         => $language,
                     'encoding'         => fake()->randomElement(['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ']),
-                    'encoding_custom'  => null,
                     'isci'             => $finalIsci,
                 ]);
 

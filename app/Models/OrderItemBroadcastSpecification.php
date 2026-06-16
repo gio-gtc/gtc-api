@@ -18,7 +18,6 @@ class OrderItemBroadcastSpecification extends Model
         'duration_seconds',
         'language',
         'encoding',
-        'encoding_custom',
         'isci',
     ];
 

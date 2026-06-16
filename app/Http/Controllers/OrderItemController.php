@@ -41,33 +41,29 @@ class OrderItemController extends Controller
         $language = Arr::get($specs, 'language');
 
         if ($cut === 'International TV Package' || $type === 'International') {
-            if ($durationSeconds !== 30) {
+            // 🔓 Cast to int since duration can now be passed as a string like "30"
+            if ((int)$durationSeconds !== 30) {
                 $customErrors['specifications.duration_seconds'] = ['International spots are locked to 30 seconds.'];
             }
             if (!is_string($language) || !Str::startsWith($language, 'English')) {
                 $customErrors['specifications.language'] = ['International spots are locked to English.'];
             }
         } else {
-            if (!is_string($cut) || !in_array($cut, $typeConfig['cuts'] ?? [], true)) {
-                $customErrors['specifications.cut'] = ['The selected cut variant is not valid.'];
+            // 🔓 Since fields are now open custom strings, we simply validate that they aren't left blank
+            if (blank($cut)) {
+                $customErrors['specifications.cut'] = ['The cut variant is required.'];
             }
-            if (!is_int($durationSeconds) || !in_array($durationSeconds, $typeConfig['durations'] ?? [], true)) {
-                $customErrors['specifications.duration_seconds'] = ['The selected duration is invalid.'];
+            if (blank($durationSeconds)) {
+                $customErrors['specifications.duration_seconds'] = ['The duration is required.'];
             }
-            if (!is_string($language) || !in_array($language, $typeConfig['languages'] ?? [], true)) {
-                $customErrors['specifications.language'] = ['The selected language is invalid.'];
+            if (blank($language)) {
+                $customErrors['specifications.language'] = ['The language is required.'];
             }
         }
 
         $encoding = Arr::get($specs, 'encoding');
-        $encodingCustom = trim((string) Arr::get($specs, 'encoding_custom'));
-        $hasCatalog = !blank($encoding);
-        $hasCustom = !blank($encodingCustom);
-
-        if (($hasCatalog && $hasCustom) || (!$hasCatalog && !$hasCustom)) {
-            $customErrors['specifications.encoding'] = ['Provide exactly one of encoding or encoding_custom.'];
-        } elseif ($hasCatalog && !in_array($encoding, $blueprint['encodings'] ?? [], true)) {
-            $customErrors['specifications.encoding'] = ['The selected catalog profile is invalid.'];
+        if (blank($encoding)) {
+            $customErrors['specifications.encoding'] = ['The encoding field is required.'];
         }
 
         return $customErrors;
@@ -119,7 +115,6 @@ class OrderItemController extends Controller
                 'duration_seconds' => (int) $specs['duration_seconds'],
                 'language'         => $specs['language'],
                 'encoding'         => $specs['encoding'] ?? null,
-                'encoding_custom'  => $specs['encoding_custom'] ?? null,
                 'isci'             => $newIsci,
             ]);
 

@@ -104,7 +104,6 @@ class OrderItemValidationTest extends TestCase
                 'duration_seconds' => 30,
                 'language'         => 'English',
                 'encoding'         => 'Station MP4 (Broadcast)',
-                'encoding_custom'  => 'Illegal Second Option' // ❌ Providing both must fail
             ]
         ];
 

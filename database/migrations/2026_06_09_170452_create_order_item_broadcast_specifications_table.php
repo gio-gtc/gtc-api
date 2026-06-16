@@ -10,13 +10,12 @@ return new class extends Migration
     {
         Schema::create('order_item_broadcast_specifications', function (Blueprint $table) {
             $table->id();
-            $table->string('type')->index();
-            $table->string('cut');
-            $table->integer('duration_seconds')->index();
-            $table->string('language');
-            $table->string('encoding')->nullable()->index();
-            $table->string('encoding_custom')->nullable();
-            $table->string('isci')->nullable()->unique();
+            $table->string('type')->nullable();
+            $table->string('cut')->nullable();
+            $table->string('duration_seconds')->nullable(); 
+            $table->string('language')->nullable();
+            $table->string('encoding')->nullable(); 
+            $table->string('isci')->nullable();
             $table->timestamps();
         });
     }
