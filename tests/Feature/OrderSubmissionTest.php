@@ -98,7 +98,7 @@ class OrderSubmissionTest extends TestCase
                 'cut'              => 'Main Event Teaser',
                 'duration_seconds' => 30,
                 'language'         => 'English (US)',
-                'encoding'         => 'H264-MP4 (Online or Venue)'
+                'encoding'         => ['H264-MP4 (Online or Venue)']
             ]
         ])->assertStatus(201);
 

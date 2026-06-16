@@ -11,13 +11,14 @@ use App\Models\OrderItemBroadcastSpecification;
 use App\Models\Tour;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
+use Illuminate\Support\Arr;
 
 class MockOrderSeeder extends Seeder
 {
     public function run(): void
     {
         $isciSequence = 1;
+        $encodingsPool = ['H264-MP4 (Online or Venue)', 'Station MP4 (Broadcast)', 'Hulu', 'Amazon', 'Netflix', 'Connect TV', 'Custom Encode TEst'];
 
         OrderItem::query()->delete();
         OrderShowDate::query()->delete();
@@ -46,7 +47,7 @@ class MockOrderSeeder extends Seeder
             'default_price'          => 250.00,
             'tags'                   => ['Audio'],
             'form_blueprint'         => [
-                'encodings' => ['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ'],
+                'encodings' => $encodingsPool,
                 'types' => [
                     'Generic' => [
                         'cuts' => ['Pre Sale', 'Week of', 'Post Sale'],
@@ -121,7 +122,7 @@ class MockOrderSeeder extends Seeder
                     'cut'              => $cut,
                     'duration_seconds' => $duration,
                     'language'         => $language,
-                    'encoding'         => fake()->randomElement(['Station MP4 (Broadcast)', 'Connect TV', 'ProRes 422 HQ']),
+                    'encoding'         => array_slice(Arr::shuffle($encodingsPool), 0, rand(1, 2)),
                     'isci'             => $finalIsci,
                 ]);
 
