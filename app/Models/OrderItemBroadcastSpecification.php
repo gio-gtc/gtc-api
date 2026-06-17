@@ -10,7 +10,7 @@ class OrderItemBroadcastSpecification extends Model
 {
     use HasFactory;
 
-    protected $table = 'order_item_broadcast_specifications';
+    protected $table = 'order_item_broadcast_specs';
 
     protected $casts = [
         'encoding' => 'array',

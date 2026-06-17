@@ -11,9 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('key_art_specifications', function (Blueprint $table) {
+        Schema::create('order_item_social_specs', function (Blueprint $table) {
             $table->id();
-            $table->string('W')->nullable();
+            $table->string('isci')->nullable()->unique();
+            $table->string('type')->nullable();
             $table->timestamps();
         });
     }
@@ -23,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('key_art_specifications');
+        Schema::dropIfExists('order_item_social_specs');
     }
 };

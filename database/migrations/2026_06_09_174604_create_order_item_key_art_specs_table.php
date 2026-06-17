@@ -11,10 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('radio_audio_specifications', function (Blueprint $table) {
+        Schema::create('order_item_key_art_specs', function (Blueprint $table) {
             $table->id();
-            $table->string('isci')->nullable()->unique();
-            $table->string('type')->nullable();
+            $table->string('W')->nullable();
             $table->timestamps();
         });
     }
@@ -24,6 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('radio_audio_specifications');
+        Schema::dropIfExists('order_item_key_art_specs');
     }
 };

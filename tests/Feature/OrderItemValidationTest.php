@@ -56,7 +56,7 @@ class OrderItemValidationTest extends TestCase
         ]);
 
         // 🚀 ADDED: Confirms that the child specification row was cleanly separated into its own table
-        $this->assertDatabaseHas('order_item_broadcast_specifications', [
+        $this->assertDatabaseHas('order_item_broadcast_specs', [
             'type'             => 'Generic',
             'cut'              => 'Pre Sale',
             'duration_seconds' => 30,

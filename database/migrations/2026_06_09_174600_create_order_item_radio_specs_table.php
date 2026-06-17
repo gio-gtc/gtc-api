@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('social_video_specifications', function (Blueprint $table) {
+        Schema::create('order_item_radio_specs', function (Blueprint $table) {
             $table->id();
             $table->string('isci')->nullable()->unique();
             $table->string('type')->nullable();
@@ -24,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('social_video_specifications');
+        Schema::dropIfExists('order_item_radio_specs');
     }
 };

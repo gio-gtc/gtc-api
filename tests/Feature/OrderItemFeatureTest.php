@@ -128,7 +128,7 @@ class OrderItemFeatureTest extends TestCase
         ]);
 
         // 4. Verify the new specification record matches the R1 sequence suffix
-        $this->assertDatabaseHas('order_item_broadcast_specifications', [
+        $this->assertDatabaseHas('order_item_broadcast_specs', [
             'isci' => 'GTC000100R1'
         ]);
 
