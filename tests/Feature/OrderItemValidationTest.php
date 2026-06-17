@@ -7,7 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemStatus;
-use App\Models\OrderItemBroadcastSpecification;
+use App\Models\OrderItemBroadcastSpecs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class OrderItemValidationTest extends TestCase
@@ -52,7 +52,7 @@ class OrderItemValidationTest extends TestCase
         // Assert core order ledger entry was built
         $this->assertDatabaseHas('order_items', [
             'order_id'         => $order->id,
-            'specifiable_type' => OrderItemBroadcastSpecification::class,
+            'specifiable_type' => OrderItemBroadcastSpecs::class,
         ]);
 
         // 🚀 ADDED: Confirms that the child specification row was cleanly separated into its own table
@@ -117,7 +117,7 @@ class OrderItemValidationTest extends TestCase
     public function it_transitions_status_to_cancelled_on_delete()
     {
         // Generate specifiable child dependency to support controller refresh return rules
-        $broadcastSpec = OrderItemBroadcastSpecification::create([
+        $broadcastSpec = OrderItemBroadcastSpecs::create([
             'type' => 'Generic', 'cut' => 'Pre Sale', 'duration_seconds' => 30, 'language' => 'English'
         ]);
 
@@ -125,7 +125,7 @@ class OrderItemValidationTest extends TestCase
         $orderItem = OrderItem::factory()->create([
             'order_item_status_id' => 1, // Active / Still In Cart
             'specifiable_id'       => $broadcastSpec->id,
-            'specifiable_type'     => OrderItemBroadcastSpecification::class
+            'specifiable_type'     => OrderItemBroadcastSpecs::class
         ]);
 
         $response = $this->deleteJson("/api/order-items/{$orderItem->id}");

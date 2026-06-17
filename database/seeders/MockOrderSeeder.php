@@ -7,11 +7,13 @@ use App\Models\OrderItem;
 use App\Models\OrderItemStatus;
 use App\Models\OrderShowDate;
 use App\Models\OrderMenuItem;
-use App\Models\OrderItemBroadcastSpecification;
+use App\Models\OrderItemBroadcastSpecs;
+use App\Models\OrderItemSocialSpecs;
 use App\Models\Tour;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Arr;
+use Exception;
 
 class MockOrderSeeder extends Seeder
 {
@@ -40,28 +42,9 @@ class MockOrderSeeder extends Seeder
             $tourCount = $tours->count();
         }
 
-        $broadcastMenuItem = OrderMenuItem::where('order_menu_category_id', 1)->first() ?? OrderMenuItem::create([
-            'order_menu_category_id' => 1,
-            'name'                   => 'Broadcast & Streaming Video Details',
-            'slug'                   => 'broadcast-streaming-video-details',
-            'default_price'          => 250.00,
-            'tags'                   => ['Audio'],
-            'form_blueprint'         => [
-                'encodings' => $encodingsPool,
-                'types' => [
-                    'Generic' => [
-                        'cuts' => ['Pre Sale', 'Week of', 'Post Sale'],
-                        'durations' => [15, 30, 60],
-                        'languages' => ['English', 'Spanish', 'French']
-                    ],
-                    'International' => [
-                        'cuts' => ['International TV Package'],
-                        'durations' => [30],
-                        'languages' => ['English']
-                    ]
-                ]
-            ]
-        ]);
+        // 2. Define Menu Items
+        $broadcastMenuItem = OrderMenuItem::where('order_menu_category_id', 1)->first();
+        $socialMenuItem = OrderMenuItem::where('order_menu_category_id', 2)->first();
 
         $itemStatuses = OrderItemStatus::all();
         $cancelledStatus = $itemStatuses->whereIn('name', ['Cancelled', 'Cancelled'])->first();
@@ -78,6 +61,7 @@ class MockOrderSeeder extends Seeder
         );
         shuffle($statusPool);
 
+        // ORDER COUNT
         for ($i = 0; $i < 11; $i++) {
             $assignedTour = $tours[$i % $tourCount];
 
@@ -93,48 +77,62 @@ class MockOrderSeeder extends Seeder
                 ]);
             }
 
+            // ORDER ITEMS COUNT
             $orderItems = rand(4, 10);
-            for ($k = 0; $k < $orderItems; $k++) {
+            $orderItemTypes = ['Social Video', 'Broadcast'];
+
+            $Manifest = array_map(fn() => Arr::random($orderItemTypes), range(1, $orderItems));
+
+            foreach ($Manifest as $itemType) {
                 $revisionNumber = rand(0, 2);
-                $paddedNumber = str_pad($isciSequence, 6, '0', STR_PAD_LEFT);
-                $baseIsci = "GTC{$paddedNumber}";
+                $paddedNumber = str_pad($isciSequence++, 6, '0', STR_PAD_LEFT);
+                $finalIsci = $revisionNumber > 0 ? "GTC{$paddedNumber}R{$revisionNumber}" : "GTC{$paddedNumber}";
                 
-                $isciSequence++;
-
-                $finalIsci = $revisionNumber > 0 ? "{$baseIsci}R{$revisionNumber}" : $baseIsci;
-
                 $allocatedStatusId = array_pop($statusPool) ?? $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2;
-                $mediaType = fake()->randomElement(['Generic', 'International']);
-                
-                if ($mediaType === 'International') {
-                    $cut = 'International TV Package';
-                    $duration = 30;
-                    $language = 'English';
-                } else {
-                    $cut = fake()->randomElement(['Pre Sale', 'Week of', 'Post Sale']);
-                    $duration = fake()->randomElement([15, 30, 60]);
-                    $language = fake()->randomElement(['English', 'Spanish', 'French']);
-                }
+                $menuItem = ($itemType === 'Broadcast') ? $broadcastMenuItem : $socialMenuItem;
 
-                // A. Persist the updated child row data block using the clean new class structure
-                $broadcastSpec = OrderItemBroadcastSpecification::create([
-                    'type'             => $mediaType,
-                    'cut'              => $cut,
-                    'duration_seconds' => $duration,
-                    'language'         => $language,
-                    'encoding'         => array_slice(Arr::shuffle($encodingsPool), 0, rand(1, 2)),
-                    'isci'             => $finalIsci,
-                ]);
+                // 2. Define the 'Recipe' for each type
+                [$modelClass, $specData] = match ($itemType) {
+                    'Broadcast' => [
+                        OrderItemBroadcastSpecs::class,
+                        (function() use ($encodingsPool, $finalIsci) {
+                            $type = fake()->randomElement(['Generic', 'Amex', 'Citi', 'Verison', 'International']);
+                            return [
+                                'type'             => $type,
+                                'cut'              => ($type === 'International') ? 'International TV Package' : fake()->randomElement(['Pre Sale', 'Week of', 'Post Sale']),
+                                'duration_seconds' => ($type === 'International') ? 30 : fake()->randomElement([15, 30, 60]),
+                                'language'         => ($type === 'International') ? 'English' : fake()->randomElement(['English', 'Spanish', 'French']),
+                                'encoding'         => array_slice(Arr::shuffle($encodingsPool), 0, rand(1, 2)),
+                                'isci'             => $finalIsci,
+                            ];
+                        })(),
+                    ],
+                    'Social Video' => [
+                        OrderItemSocialSpecs::class,
+                        [
+                            'type'             => fake()->randomElement(['Social - 16:9', 'FB/IG Story', 'TikTok', 'Social Square', 'Social - 4:5']),
+                            'cut'              => fake()->randomElement(['Pre Sale', 'On Sale Now', "Evergreen", 'Sign Up Now']),
+                            'card_holder'      => fake()->randomElement(['Amex', 'Citi']),
+                            'duration_seconds' => (string)fake()->randomElement([10, 15, 30]),
+                            'language'         => fake()->randomElement(['English', 'Spanish', 'French']),
+                            'isci'             => $finalIsci,
+                        ]
+                    ],
+                    default => throw new Exception("Unknown item type: {$itemType}"),
+                };
 
-                // B. Save matching record to master index log mapping line
+                // 3. Create the spec and link to order item
+                $spec = $modelClass::create($specData);
+
+                // TODO: Check how to change order_menu_item_id to be based off the type
                 OrderItem::create([
                     'order_id'             => $order->id,
-                    'order_menu_item_id'   => $broadcastMenuItem->id,
+                    'order_menu_item_id'   => $menuItem->id,
                     'order_item_status_id' => $allocatedStatusId,
-                    'locked_price'         => $broadcastMenuItem->default_price ?? 250.00,
+                    'locked_price'         => $menuItem->default_price,
                     'due_date'             => now()->addDays(rand(5, 25))->format('Y-m-d'),
-                    'specifiable_id'       => $broadcastSpec->id,
-                    'specifiable_type'     => OrderItemBroadcastSpecification::class,
+                    'specifiable_id'       => $spec->id,
+                    'specifiable_type'     => $modelClass,
                     'revision_number'      => $revisionNumber,
                 ]);
             }

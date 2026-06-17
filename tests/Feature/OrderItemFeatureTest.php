@@ -6,7 +6,7 @@ use App\Models\User;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatus;
-use App\Models\OrderItemBroadcastSpecification;
+use App\Models\OrderItemBroadcastSpecs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,15 +47,15 @@ class OrderItemFeatureTest extends TestCase
     public function staff_can_bulk_update_dirty_fields_only()
     {
         // Arrange: Create items with an initial baseline date and status
-        $spec1 = OrderItemBroadcastSpecification::create(['type' => 'Generic', 'cut' => 'Pre Sale', 'duration_seconds' => 30, 'language' => 'English', 'isci' => 'GTC000001']);
-        $spec2 = OrderItemBroadcastSpecification::create(['type' => 'Generic', 'cut' => 'Pre Sale', 'duration_seconds' => 30, 'language' => 'English', 'isci' => 'GTC000002']);
+        $spec1 = OrderItemBroadcastSpecs::create(['type' => 'Generic', 'cut' => 'Pre Sale', 'duration_seconds' => 30, 'language' => 'English', 'isci' => 'GTC000001']);
+        $spec2 = OrderItemBroadcastSpecs::create(['type' => 'Generic', 'cut' => 'Pre Sale', 'duration_seconds' => 30, 'language' => 'English', 'isci' => 'GTC000002']);
 
         $item1 = OrderItem::factory()->create([
             'order_id' => $this->order->id,
             'due_date' => '2026-06-01',
             'order_item_status_id' => 2, // Unassigned
             'specifiable_id' => $spec1->id,
-            'specifiable_type' => OrderItemBroadcastSpecification::class
+            'specifiable_type' => OrderItemBroadcastSpecs::class
         ]);
 
         $item2 = OrderItem::factory()->create([
@@ -63,7 +63,7 @@ class OrderItemFeatureTest extends TestCase
             'due_date' => '2026-06-01',
             'order_item_status_id' => 2,
             'specifiable_id' => $spec2->id,
-            'specifiable_type' => OrderItemBroadcastSpecification::class
+            'specifiable_type' => OrderItemBroadcastSpecs::class
         ]);
 
         $payload = [
@@ -87,7 +87,7 @@ class OrderItemFeatureTest extends TestCase
     public function client_revision_request_creates_cloned_item_and_logs_ledger_entry()
     {
         // Arrange: Create a line item currently sitting in Client Review (Status 4)
-        $specification = OrderItemBroadcastSpecification::create([
+        $specification = OrderItemBroadcastSpecs::create([
             'type' => 'Generic',
             'cut' => 'Pre Sale',
             'duration_seconds' => 30,
@@ -100,7 +100,7 @@ class OrderItemFeatureTest extends TestCase
             'order_item_status_id' => 4, // Client Review
             'revision_number' => 0,
             'specifiable_id' => $specification->id,
-            'specifiable_type' => OrderItemBroadcastSpecification::class
+            'specifiable_type' => OrderItemBroadcastSpecs::class
         ]);
 
         $payload = [

@@ -6,7 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemStatus;
-use App\Models\OrderItemBroadcastSpecification;
+use App\Models\OrderItemBroadcastSpecs;
 use App\Models\User;
 use Database\Seeders\OrderStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,7 +39,7 @@ class OrderItemDatabaseTest extends TestCase
         $menuItem = OrderMenuItem::factory()->create(['order_menu_category_id' => 1]);
 
         // 2. Act: Create the standalone specification child row
-        $broadcastSpec = OrderItemBroadcastSpecification::create([
+        $broadcastSpec = OrderItemBroadcastSpecs::create([
             'type'             => 'Generic',
             'cut'              => 'Pre Sale',
             'duration_seconds' => 30,
@@ -55,14 +55,14 @@ class OrderItemDatabaseTest extends TestCase
             'order_item_status_id' => $unassignedStatus->id,
             'locked_price'         => 250.00,
             'specifiable_id'       => $broadcastSpec->id,
-            'specifiable_type'     => OrderItemBroadcastSpecification::class,
+            'specifiable_type'     => OrderItemBroadcastSpecs::class,
         ]);
 
         // 3. Assert: Verify relationships pull through cleanly
         $freshItem = $orderItem->fresh();
 
         $this->assertNotNull($freshItem->specifiable);
-        $this->assertInstanceOf(OrderItemBroadcastSpecification::class, $freshItem->specifiable);
+        $this->assertInstanceOf(OrderItemBroadcastSpecs::class, $freshItem->specifiable);
         $this->assertEquals('Generic', $freshItem->specifiable->type);
         $this->assertEquals('ISCI-TEST1234', $freshItem->specifiable->isci);
     }

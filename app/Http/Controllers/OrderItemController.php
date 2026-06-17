@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
-use App\Models\OrderItemBroadcastSpecification;
+use App\Models\OrderItemBroadcastSpecs;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -100,7 +100,7 @@ class OrderItemController extends Controller
         }
 
         $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
-            $latestSpec = OrderItemBroadcastSpecification::orderBy('id', 'desc')->first();
+            $latestSpec = OrderItemBroadcastSpecs::orderBy('id', 'desc')->first();
             $nextSequenceNumber = 1;
 
             if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
@@ -110,7 +110,7 @@ class OrderItemController extends Controller
             $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
             $newIsci = "GTC{$paddedNumber}";
 
-            $broadcastSpec = OrderItemBroadcastSpecification::create([
+            $broadcastSpec = OrderItemBroadcastSpecs::create([
                 'type'             => $specs['type'],
                 'cut'              => $specs['cut'],
                 'duration_seconds' => (int) $specs['duration_seconds'],
@@ -126,7 +126,7 @@ class OrderItemController extends Controller
                 'order_item_status_id' => 1, 
                 'due_date'             => $request->input('due_date'),
                 'specifiable_id'       => $broadcastSpec->id,
-                'specifiable_type'     => OrderItemBroadcastSpecification::class,
+                'specifiable_type'     => OrderItemBroadcastSpecs::class,
             ]);
         });
 
