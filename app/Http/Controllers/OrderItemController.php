@@ -339,15 +339,23 @@ class OrderItemController extends Controller
 
         $processedItem = DB::transaction(function () use ($orderItem, $request) {
             
-            // 1. FETCH & CLONE THE SPECIFICATION DYNAMICALLY (Works for all media tables!)
+            // 1. FETCH & CLONE THE SPECIFICATION DYNAMICALLY
             $oldSpecification = $orderItem->specifiable;
-            $newSpecification = $oldSpecification->replicate(); // Clones all unique schema columns automatically
+            $newSpecification = $oldSpecification->replicate(); 
             
-            // Handle ISCI version generation loops if the column exists on this specific media spec table
+            // Extract next revision from the actual string to protect against DB default column errors
             if (isset($newSpecification->isci) && !empty($oldSpecification->isci)) {
                 $baseIsci = preg_replace('/R\d+$/', '', $oldSpecification->isci);
-                $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
+                
+                if (preg_match('/R(\d+)$/', $oldSpecification->isci, $matches)) {
+                    $nextRevision = ((int) $matches[1]) + 1;
+                } else {
+                    $nextRevision = 1;
+                }
+                
                 $newSpecification->isci = "{$baseIsci}R{$nextRevision}";
+            } else {
+                $nextRevision = ((int) ($orderItem->revision_number ?? 0)) + 1;
             }
             $newSpecification->save();
 
@@ -356,8 +364,6 @@ class OrderItemController extends Controller
             $orderItem->save();
 
             // 2. SPAWN THE NEW DUPLICATE REVISION RECORD
-            $nextRevisionNumber = ((int) ($orderItem->revision_number ?? 0)) + 1;
-            
             $newRevisionItem = OrderItem::create([
                 'order_id'             => $orderItem->order_id,
                 'order_menu_item_id'   => $orderItem->order_menu_item_id,
@@ -366,8 +372,8 @@ class OrderItemController extends Controller
                 'due_date'             => $orderItem->due_date,
                 'specifiable_id'       => $newSpecification->id,
                 'specifiable_type'     => $orderItem->specifiable_type,
-                'revision_number'      => $nextRevisionNumber,
-                'asset_path'            => null,
+                'revision_number'      => $nextRevision,
+                'asset_path'           => null,
             ]);
 
             // 3. DUPLICATE PIVOT TABLE CONNECTIONS (Assignees)
