@@ -33,6 +33,9 @@ class MockOrderSeeder extends Seeder
             $user->assignRole($randomRole);
         });
 
+        // 1. Gather the designer pool right after they are created
+        $designers = User::role('Designer')->get();
+
         Tour::factory(5)->create();
         $tours = Tour::all();
         $tourCount = $tours->count();
@@ -46,14 +49,18 @@ class MockOrderSeeder extends Seeder
         $broadcastMenuItem = OrderMenuItem::where('order_menu_category_id', 1)->first();
         $socialMenuItem = OrderMenuItem::where('order_menu_category_id', 2)->first();
 
+        // 3. Extract Statuses and hold specific IDs for logic checks
         $itemStatuses = OrderItemStatus::all();
-        $cancelledStatus = $itemStatuses->whereIn('name', ['Cancelled', 'Cancelled'])->first();
+        $cancelledStatus = $itemStatuses->where('name', 'Cancelled')->first();
         $cancelledId = $cancelledStatus ? $cancelledStatus->id : 5;
+
+        $stillInCartId = $itemStatuses->where('name', 'Still In Cart')->first()?->id ?? 1;
+        $unassignedId = $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2;
 
         $statusPool = array_merge(
             array_fill(0, 3, $cancelledId),
-            array_fill(0, 7, $itemStatuses->where('name', 'Still In Cart')->first()?->id ?? 1),
-            array_fill(0, 7, $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2),
+            array_fill(0, 7, $stillInCartId),
+            array_fill(0, 7, $unassignedId),
             array_fill(0, 8, $itemStatuses->where('name', 'In Production')->first()?->id ?? 3),
             array_fill(0, 7, $itemStatuses->where('name', 'Client Review')->first()?->id ?? 4),
             array_fill(0, 7, $itemStatuses->where('name', 'Revision Request')->first()?->id ?? 5),
@@ -88,10 +95,10 @@ class MockOrderSeeder extends Seeder
                 $paddedNumber = str_pad($isciSequence++, 6, '0', STR_PAD_LEFT);
                 $finalIsci = $revisionNumber > 0 ? "GTC{$paddedNumber}R{$revisionNumber}" : "GTC{$paddedNumber}";
                 
-                $allocatedStatusId = array_pop($statusPool) ?? $itemStatuses->where('name', 'Unassigned')->first()?->id ?? 2;
+                $allocatedStatusId = array_pop($statusPool) ?? $unassignedId;
                 $menuItem = ($itemType === 'Broadcast') ? $broadcastMenuItem : $socialMenuItem;
 
-                // 2. Define the 'Recipe' for each type
+                // Define the 'Recipe' for each type
                 [$modelClass, $specData] = match ($itemType) {
                     'Broadcast' => [
                         OrderItemBroadcastSpecs::class,
@@ -121,11 +128,11 @@ class MockOrderSeeder extends Seeder
                     default => throw new Exception("Unknown item type: {$itemType}"),
                 };
 
-                // 3. Create the spec and link to order item
+                // Create the spec and link to order item
                 $spec = $modelClass::create($specData);
 
-                // TODO: Check how to change order_menu_item_id to be based off the type
-                OrderItem::create([
+                // Dynamically sets order_menu_item_id using $menuItem verified above
+                $orderItem = OrderItem::create([
                     'order_id'             => $order->id,
                     'order_menu_item_id'   => $menuItem->id,
                     'order_item_status_id' => $allocatedStatusId,
@@ -135,11 +142,18 @@ class MockOrderSeeder extends Seeder
                     'specifiable_type'     => $modelClass,
                     'revision_number'      => $revisionNumber,
                 ]);
+
+                // 4. Assignee Guard Logic
+                // If the item status is NOT "Still In Cart" or "Unassigned", attach designers
+                if ($allocatedStatusId !== $stillInCartId && $allocatedStatusId !== $unassignedId && $designers->isNotEmpty()) {
+                    $randomDesigners = $designers->random(rand(1, 2))->pluck('id');
+                    
+                    // Uses attach() to append assignments to the item's pivot table
+                    $orderItem->assignees()->attach($randomDesigners);
+                }
             }
         }
-
-        $this->call([
-            OrderItemAssigneeSeeder::class,
-        ]);
+        
+        // OrderItemAssigneeSeeder call removed since assignments are handled perfectly inline above!
     }
 }
