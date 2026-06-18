@@ -13,8 +13,11 @@ return new class extends Migration
     {
         Schema::create('order_item_radio_specs', function (Blueprint $table) {
             $table->id();
-            $table->string('isci')->nullable()->unique();
-            $table->string('type')->nullable();
+            $table->string('type');
+            $table->string('cut'); 
+            $table->string('duration_seconds');
+            $table->string('language');
+            $table->string('isci')->nullable();
             $table->timestamps();
         });
     }

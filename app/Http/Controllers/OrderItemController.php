@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemBroadcastSpecs;
+use App\Models\OrderItemRadioSpecs;
 use App\Models\OrderItemSocialSpecs;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -80,10 +81,11 @@ class OrderItemController extends Controller
         // 1. Get the latest ISCI from both tables
         $lastBroadcast = OrderItemBroadcastSpecs::latest('id')->value('isci');
         $lastSocial = OrderItemSocialSpecs::latest('id')->value('isci');
+        $lastRadio = OrderItemRadioSpecs::latest('id')->value('isci');
 
         // 2. Extract numbers, find the max, add 1
         $maxVal = 0;
-        foreach ([$lastBroadcast, $lastSocial] as $isci) {
+        foreach ([$lastBroadcast, $lastSocial, $lastRadio] as $isci) {
             if ($isci && preg_match('/GTC(\d+)/', $isci, $matches)) {
                 $maxVal = max($maxVal, (int)$matches[1]);
             }
@@ -131,6 +133,13 @@ class OrderItemController extends Controller
                     'duration_seconds' => (int)$specs['duration_seconds'],
                     'language' => $specs['language'],
                     'isci' => $this->generateIsci(),
+                ]],
+                3 => [OrderItemRadioSpecs::class, [
+                    'type'             => $specs['type'],
+                    'cut'              => $specs['cut'],
+                    'duration_seconds' => (int)$specs['duration_seconds'],
+                    'language'         => $specs['language'],
+                    'isci'             => $this->generateIsci(),
                 ]],
                 default => throw new \Exception("Unsupported category"),
             };

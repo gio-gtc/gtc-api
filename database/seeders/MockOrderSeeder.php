@@ -8,6 +8,7 @@ use App\Models\OrderItemStatus;
 use App\Models\OrderShowDate;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemBroadcastSpecs;
+use App\Models\OrderItemRadioSpecs;
 use App\Models\OrderItemSocialSpecs;
 use App\Models\Tour;
 use App\Models\User;
@@ -48,6 +49,7 @@ class MockOrderSeeder extends Seeder
         // 2. Define Menu Items
         $broadcastMenuItem = OrderMenuItem::where('order_menu_category_id', 1)->first();
         $socialMenuItem = OrderMenuItem::where('order_menu_category_id', 2)->first();
+        $radioMenuItem = OrderMenuItem::where('order_menu_category_id', 3)->first();
 
         // 3. Extract Statuses and hold specific IDs for logic checks
         $itemStatuses = OrderItemStatus::all();
@@ -86,7 +88,7 @@ class MockOrderSeeder extends Seeder
 
             // ORDER ITEMS COUNT
             $orderItems = rand(4, 10);
-            $orderItemTypes = ['Social Video', 'Broadcast'];
+            $orderItemTypes = ['Social Video', 'Broadcast', 'Radio'];
 
             $Manifest = array_map(fn() => Arr::random($orderItemTypes), range(1, $orderItems));
 
@@ -96,7 +98,11 @@ class MockOrderSeeder extends Seeder
                 $finalIsci = $revisionNumber > 0 ? "GTC{$paddedNumber}R{$revisionNumber}" : "GTC{$paddedNumber}";
                 
                 $allocatedStatusId = array_pop($statusPool) ?? $unassignedId;
-                $menuItem = ($itemType === 'Broadcast') ? $broadcastMenuItem : $socialMenuItem;
+                $menuItem = match ($itemType) {
+                    'Broadcast'    => $broadcastMenuItem,
+                    'Social Video' => $socialMenuItem,
+                    'Radio'        => $radioMenuItem,
+                };
 
                 // Define the 'Recipe' for each type
                 [$modelClass, $specData] = match ($itemType) {
@@ -106,8 +112,8 @@ class MockOrderSeeder extends Seeder
                             $type = fake()->randomElement(['Generic', 'Amex', 'Citi', 'Verison', 'International']);
                             return [
                                 'type'             => $type,
-                                'cut'              => ($type === 'International') ? 'International TV Package' : fake()->randomElement(['Pre Sale', 'Week of', 'Post Sale']),
-                                'duration_seconds' => ($type === 'International') ? 30 : fake()->randomElement([15, 30, 60]),
+                                'cut'              => ($type === 'International') ? 'International TV Package' : fake()->randomElement(['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day Of', 'Superless', 'Sample']),
+                                'duration_seconds' => ($type === 'International') ? 30 : fake()->randomElement([10, 15, 30]),
                                 'language'         => ($type === 'International') ? 'English' : fake()->randomElement(['English', 'Spanish', 'French']),
                                 'encoding'         => array_slice(Arr::shuffle($encodingsPool), 0, rand(1, 2)),
                                 'isci'             => $finalIsci,
@@ -124,6 +130,19 @@ class MockOrderSeeder extends Seeder
                             'language'         => fake()->randomElement(['English', 'Spanish', 'French']),
                             'isci'             => $finalIsci,
                         ]
+                    ],
+                    'Radio' => [
+                        OrderItemRadioSpecs::class,
+                        (function() use ($finalIsci) {
+                            $type = fake()->randomElement(['Generic', 'Amex', 'Citi', 'Verison', 'International']);
+                            return[
+                                'type'             => $type,
+                                'cut'              => ($type === 'International') ? 'International Radio Package' : fake()->randomElement(['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day Of']),
+                                'duration_seconds' => ($type === 'International') ? 30 : (string)fake()->randomElement([15, 30, 60]),
+                                'language'         => ($type === 'International') ? 'English' : fake()->randomElement(['English', 'Spanish', 'French']),
+                                'isci'             => $finalIsci,
+                            ];
+                        }) ()
                     ],
                     default => throw new Exception("Unknown item type: {$itemType}"),
                 };
