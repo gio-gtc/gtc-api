@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemBroadcastSpecs;
+use App\Models\OrderItemSocialSpecs;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -71,68 +72,85 @@ class OrderItemController extends Controller
     }
 
     /**
+     * Helper to generate a globally unique, sequential ISCI code
+     * across all specification types.
+     */
+    private function generateIsci(): string
+    {
+        // 1. Get the latest ISCI from both tables
+        $lastBroadcast = OrderItemBroadcastSpecs::latest('id')->value('isci');
+        $lastSocial = OrderItemSocialSpecs::latest('id')->value('isci');
+
+        // 2. Extract numbers, find the max, add 1
+        $maxVal = 0;
+        foreach ([$lastBroadcast, $lastSocial] as $isci) {
+            if ($isci && preg_match('/GTC(\d+)/', $isci, $matches)) {
+                $maxVal = max($maxVal, (int)$matches[1]);
+            }
+        }
+
+        $nextSequenceNumber = $maxVal + 1;
+        
+        // 3. Return the formatted string
+        return "GTC" . str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
      * Handles adding a polymorphic broadcast item row to a parent order.
      * Route: POST /api/orders/{order}/items
      */
     public function store(Order $order, Request $request): JsonResponse
     {
-        $baseValidator = Validator::make($request->all(), [
-            'order_menu_item_id' => 'required|integer|exists:order_menu_items,id',
+        // 1. Validation (add more rules as needed)
+        $request->validate([
+            'order_menu_item_id' => 'required|exists:order_menu_items,id',
             'due_date'           => 'required|date_format:Y-m-d',
             'specifications'     => 'required|array',
         ]);
 
-        if ($baseValidator->fails()) {
-            return response()->json(['errors' => $baseValidator->errors()], 422);
-        }
-
         $menuItem = OrderMenuItem::findOrFail($request->input('order_menu_item_id'));
-        if ((int)$menuItem->order_menu_category_id !== 1) {
-            return response()->json([
-                'errors' => ['order_menu_item_id' => ['The selected menu item does not belong to Category 1.']]
-            ], 422);
-        }
-
         $specs = $request->input('specifications');
-        $customErrors = $this->validateVideoSpecifications($menuItem, $specs);
-        if (count($customErrors) > 0) {
-            return response()->json(['errors' => $customErrors], 422);
-        }
 
         $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
-            $latestSpec = OrderItemBroadcastSpecs::orderBy('id', 'desc')->first();
-            $nextSequenceNumber = 1;
+            
+            // 2. Polymorphic Routing based on Menu Item Category
+            // Category 1 = Broadcast, 2 = Social
+            [$modelClass, $data] = match ((int)$menuItem->order_menu_category_id) {
+                1 => [OrderItemBroadcastSpecs::class, [
+                    'type' => $specs['type'],
+                    'cut'  => $specs['cut'],
+                    'duration_seconds' => (int)$specs['duration_seconds'],
+                    'language' => $specs['language'],
+                    'encoding' => $specs['encoding'] ?? null,
+                    'isci' => $this->generateIsci(),
+                ]],
+                2 => [OrderItemSocialSpecs::class, [
+                    'type' => $specs['type'],
+                    'cut'  => $specs['cut'],
+                    'card_holder' => $specs['card_holder'],
+                    'duration_seconds' => (int)$specs['duration_seconds'],
+                    'language' => $specs['language'],
+                    'isci' => $this->generateIsci(),
+                ]],
+                default => throw new \Exception("Unsupported category"),
+            };
 
-            if ($latestSpec && preg_match('/GTC(\d+)/', $latestSpec->isci, $matches)) {
-                $nextSequenceNumber = ((int) $matches[1]) + 1;
-            }
-
-            $paddedNumber = str_pad($nextSequenceNumber, 6, '0', STR_PAD_LEFT);
-            $newIsci = "GTC{$paddedNumber}";
-
-            $broadcastSpec = OrderItemBroadcastSpecs::create([
-                'type'             => $specs['type'],
-                'cut'              => $specs['cut'],
-                'duration_seconds' => (int) $specs['duration_seconds'],
-                'language'         => $specs['language'],
-                'encoding'         => $specs['encoding'] ?? null,
-                'isci'             => $newIsci,
-            ]);
+            $specRecord = $modelClass::create($data);
 
             return OrderItem::create([
                 'order_id'             => $order->id,
                 'order_menu_item_id'   => $menuItem->id,
-                'locked_price'         => $menuItem->default_price ?? '0.00',
-                'order_item_status_id' => 1, 
+                'locked_price'         => $menuItem->default_price ?? 0.00,
+                'order_item_status_id' => 1,
                 'due_date'             => $request->input('due_date'),
-                'specifiable_id'       => $broadcastSpec->id,
-                'specifiable_type'     => OrderItemBroadcastSpecs::class,
+                'specifiable_id'       => $specRecord->id,
+                'specifiable_type'     => $modelClass,
             ]);
         });
 
         return response()->json([
-            'message' => 'Video delivery item successfully authorized and appended to cart.',
-            'data'    => $item->fresh(['specifiable', 'statusLookup'])
+            'message' => 'Item successfully added.',
+            'data'    => $item->fresh(['specifiable'])
         ], 201);
     }
 
