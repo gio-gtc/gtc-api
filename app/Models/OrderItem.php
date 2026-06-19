@@ -35,12 +35,24 @@ class OrderItem extends Model
 
     protected static function booted()
     {
+        // Structural Lockdown Rule (Immutability Lock)
+        // Prevents changing an item's core identity or media platform after creation
+        static::updating(function (OrderItem $orderItem) {
+            $immutableFields = ['specifiable_type', 'specifiable_id', 'order_menu_item_id'];
+
+            if ($orderItem->isDirty($immutableFields)) {
+                throw new \Exception(
+                    "Polymorphic type definitions and menu item mappings are immutable once created."
+                );
+            }
+        });
+
         // 1. Automated System Tracking Code Injection
         static::created(function (OrderItem $item) {
             $specification = $item->specifiable;
 
-            // If a child row exists but hasn't had an ISCI code set, stamp it with the master invoice tracking code
-            if ($specification && empty($specification->isci)) {
+            // Safe Check: Only stamp an ISCI if the model supports it (keeps Key Art safe!)
+            if ($specification && in_array('isci', $specification->getFillable()) && empty($specification->isci)) {
                 $paddedId = str_pad($item->id, 6, "0", STR_PAD_LEFT);
                 
                 $specification->update([

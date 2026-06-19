@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemBroadcastSpecs;
+use App\Models\OrderItemKeyArtSpecs;
 use App\Models\OrderItemRadioSpecs;
 use App\Models\OrderItemSocialSpecs;
 use Illuminate\Http\Request;
@@ -141,6 +142,11 @@ class OrderItemController extends Controller
                     'language'         => $specs['language'],
                     'isci'             => $this->generateIsci(),
                 ]],
+                4 => [OrderItemKeyArtSpecs::class, [
+                    'type' => $specs['type'],
+                    'w'    => (string)$specs['w'],
+                    'h'    => (string)$specs['h'],
+                ]],
                 default => throw new \Exception("Unsupported category"),
             };
 
@@ -188,14 +194,23 @@ class OrderItemController extends Controller
             ], 422);
         }
 
-        // 2. Loose validation matching our dirty fields strategy
-        $validated = $request->validate([
+        // 2. Loose validation built to handle all media formats dynamically
+        $validationRules = [
             'due_date'             => 'sometimes|nullable|date_format:Y-m-d',
             'order_item_status_id' => 'sometimes|exists:order_item_statuses,id',
             'assignee_ids'         => 'sometimes|array',
             'assignee_ids.*'       => 'exists:users,id',
             'specifications'       => 'sometimes|array',
-        ]);
+        ];
+
+        // Tighten validation specifically when updating Key Art sizes
+        if ($orderItem->specifiable_type === OrderItemKeyArtSpecs::class) {
+            $validationRules['specifications.type'] = 'sometimes|string';
+            $validationRules['specifications.w']    = 'sometimes|string';
+            $validationRules['specifications.h']    = 'sometimes|string';
+        }
+
+        $validated = $request->validate($validationRules);
 
         return DB::transaction(function () use ($orderItem, $request) {
             
@@ -216,7 +231,7 @@ class OrderItemController extends Controller
                 $orderItem->assignees()->sync($request->input('assignee_ids', []));
             }
 
-            // In-place update to polymorphic spec tables
+            // In-place update to polymorphic spec tables (Works for Key Art instantly!)
             $incomingSpecs = $request->input('specifications');
             if (!empty($incomingSpecs) && is_array($incomingSpecs)) {
                 $orderItem->specifiable?->update($incomingSpecs);

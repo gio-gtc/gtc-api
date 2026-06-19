@@ -8,6 +8,7 @@ use App\Models\OrderItemStatus;
 use App\Models\OrderShowDate;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemBroadcastSpecs;
+use App\Models\OrderItemKeyArtSpecs;
 use App\Models\OrderItemRadioSpecs;
 use App\Models\OrderItemSocialSpecs;
 use App\Models\Tour;
@@ -50,6 +51,7 @@ class MockOrderSeeder extends Seeder
         $broadcastMenuItem = OrderMenuItem::where('order_menu_category_id', 1)->first();
         $socialMenuItem = OrderMenuItem::where('order_menu_category_id', 2)->first();
         $radioMenuItem = OrderMenuItem::where('order_menu_category_id', 3)->first();
+        $keyArtMenuItem = OrderMenuItem::where('order_menu_category_id', 4)->first();
 
         // 3. Extract Statuses and hold specific IDs for logic checks
         $itemStatuses = OrderItemStatus::all();
@@ -88,7 +90,7 @@ class MockOrderSeeder extends Seeder
 
             // ORDER ITEMS COUNT
             $orderItems = rand(4, 10);
-            $orderItemTypes = ['Social Video', 'Broadcast', 'Radio'];
+            $orderItemTypes = ['Social Video', 'Broadcast', 'Radio', 'Key Art'];
 
             $Manifest = array_map(fn() => Arr::random($orderItemTypes), range(1, $orderItems));
 
@@ -102,6 +104,7 @@ class MockOrderSeeder extends Seeder
                     'Broadcast'    => $broadcastMenuItem,
                     'Social Video' => $socialMenuItem,
                     'Radio'        => $radioMenuItem,
+                    'Key Art'      => $keyArtMenuItem,
                 };
 
                 // Define the 'Recipe' for each type
@@ -143,6 +146,14 @@ class MockOrderSeeder extends Seeder
                                 'isci'             => $finalIsci,
                             ];
                         }) ()
+                    ],
+                    'Key Art' => [
+                        OrderItemKeyArtSpecs::class,
+                        [
+                            'type' => fake()->randomElement(['Key Art Package', 'Socials & Web Banners', 'International Key art & Social Package']),
+                            'w'    => (string)fake()->randomElement([1920, 1080, 1200, null]),
+                            'h'    => (string)fake()->randomElement([1080, 1350, 1200, null]),
+                        ]
                     ],
                     default => throw new Exception("Unknown item type: {$itemType}"),
                 };

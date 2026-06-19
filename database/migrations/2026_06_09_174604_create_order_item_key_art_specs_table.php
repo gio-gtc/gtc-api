@@ -13,7 +13,9 @@ return new class extends Migration
     {
         Schema::create('order_item_key_art_specs', function (Blueprint $table) {
             $table->id();
-            $table->string('W')->nullable();
+            $table->string('type');
+            $table->string('w')->nullable();
+            $table->string('h')->nullable();
             $table->timestamps();
         });
     }
