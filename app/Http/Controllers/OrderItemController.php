@@ -74,6 +74,51 @@ class OrderItemController extends Controller
     }
 
     /**
+     * Normalize Key Art dimension wire values for nullable string columns.
+     * Missing keys, null, and empty strings all persist as null.
+     */
+    private function normalizeKeyArtDimension(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * Build Key Art spec row data from a POST/PATCH specifications array.
+     */
+    private function keyArtSpecsFromArray(array $specs): array
+    {
+        return [
+            'type' => $specs['type'],
+            'w' => $this->normalizeKeyArtDimension(Arr::get($specs, 'w')),
+            'h' => $this->normalizeKeyArtDimension(Arr::get($specs, 'h')),
+        ];
+    }
+
+    /**
+     * Normalize partial Key Art PATCH payloads (only present keys are updated).
+     */
+    private function normalizeKeyArtPatchSpecs(array $incomingSpecs): array
+    {
+        $normalized = [];
+
+        if (array_key_exists('type', $incomingSpecs)) {
+            $normalized['type'] = $incomingSpecs['type'];
+        }
+        if (array_key_exists('w', $incomingSpecs)) {
+            $normalized['w'] = $this->normalizeKeyArtDimension($incomingSpecs['w']);
+        }
+        if (array_key_exists('h', $incomingSpecs)) {
+            $normalized['h'] = $this->normalizeKeyArtDimension($incomingSpecs['h']);
+        }
+
+        return $normalized;
+    }
+
+    /**
      * Helper to generate a globally unique, sequential ISCI code
      * across all specification types.
      */
@@ -142,11 +187,7 @@ class OrderItemController extends Controller
                     'language'         => $specs['language'],
                     'isci'             => $this->generateIsci(),
                 ]],
-                4 => [OrderItemKeyArtSpecs::class, [
-                    'type' => $specs['type'],
-                    'w'    => (string)$specs['w'],
-                    'h'    => (string)$specs['h'],
-                ]],
+                4 => [OrderItemKeyArtSpecs::class, $this->keyArtSpecsFromArray($specs)],
                 default => throw new \Exception("Unsupported category"),
             };
 
@@ -206,8 +247,8 @@ class OrderItemController extends Controller
         // Tighten validation specifically when updating Key Art sizes
         if ($orderItem->specifiable_type === OrderItemKeyArtSpecs::class) {
             $validationRules['specifications.type'] = 'sometimes|string';
-            $validationRules['specifications.w']    = 'sometimes|string';
-            $validationRules['specifications.h']    = 'sometimes|string';
+            $validationRules['specifications.w'] = 'sometimes|nullable|string';
+            $validationRules['specifications.h'] = 'sometimes|nullable|string';
         }
 
         $validated = $request->validate($validationRules);
@@ -234,7 +275,13 @@ class OrderItemController extends Controller
             // In-place update to polymorphic spec tables (Works for Key Art instantly!)
             $incomingSpecs = $request->input('specifications');
             if (!empty($incomingSpecs) && is_array($incomingSpecs)) {
-                $orderItem->specifiable?->update($incomingSpecs);
+                $specPayload = $orderItem->specifiable_type === OrderItemKeyArtSpecs::class
+                    ? $this->normalizeKeyArtPatchSpecs($incomingSpecs)
+                    : $incomingSpecs;
+
+                if (!empty($specPayload)) {
+                    $orderItem->specifiable?->update($specPayload);
+                }
             }
 
             // Force parent order status and tags engine refresh

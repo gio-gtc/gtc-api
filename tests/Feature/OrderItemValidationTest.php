@@ -8,6 +8,7 @@ use App\Models\OrderItem;
 use App\Models\OrderMenuItem;
 use App\Models\OrderItemStatus;
 use App\Models\OrderItemBroadcastSpecs;
+use App\Models\OrderItemKeyArtSpecs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class OrderItemValidationTest extends TestCase
@@ -111,6 +112,33 @@ class OrderItemValidationTest extends TestCase
 
         $response->assertStatus(422)
                  ->assertJsonValidationErrors(['specifications.encoding']);
+    }
+
+    public function test_it_creates_key_art_line_item_when_w_and_h_are_omitted(): void
+    {
+        $order = Order::factory()->create();
+        $menuItem = OrderMenuItem::where('order_menu_category_id', 4)->firstOrFail();
+
+        $response = $this->postJson("/api/orders/{$order->id}/items", [
+            'order_menu_item_id' => $menuItem->id,
+            'due_date' => '2026-06-20',
+            'specifications' => [
+                'type' => 'Key Art Package',
+            ],
+        ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order->id,
+            'specifiable_type' => OrderItemKeyArtSpecs::class,
+        ]);
+
+        $this->assertDatabaseHas('order_item_key_art_specs', [
+            'type' => 'Key Art Package',
+            'w' => null,
+            'h' => null,
+        ]);
     }
 
     /** @test */
