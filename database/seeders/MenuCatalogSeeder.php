@@ -78,7 +78,7 @@ class MenuCatalogSeeder extends Seeder
                     'tags' => ['Audio'],
                     'blueprint' => [
                         'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
-                        'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of'],
+                        'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of', 'International Radio Package'],
                         'durations' => [15, 30, 60],
                         'languages' => ['English', 'Spanish', 'French']
                     ]
