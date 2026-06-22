@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\AccessRequestController;
 use App\Http\Controllers\AssigneeController;
+use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\ProfileController;
@@ -74,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('orders/{order}', [OrderController::class, 'update'])->name('orders.update');
     Route::post('/orders/{order}/submit', [OrderController::class, 'submit'])->name('orders.submit');
     Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
+    Route::post('orders/{order}/invoices', [InvoiceController::class, 'store'])->name('orders.invoices.store');
     Route::delete('order-items/{orderItem}', [OrderItemController::class, 'destroy'])->name('order-items.destroy');
     Route::patch('order-items/{orderItem}', [OrderItemController::class, 'update'])->name('order-items.update');
     Route::post('order-items/bulk-update', [OrderItemController::class, 'bulkUpdate'])->name('order-items.bulk-update');

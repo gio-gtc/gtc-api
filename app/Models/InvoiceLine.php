@@ -14,8 +14,13 @@ class InvoiceLine extends Model
         'invoice_id', 
         'order_item_id', 
         'description', 
+        'unit_price_cents', 
+        'quantity', 
+        'total_cents',
         'price'
     ];
+
+    protected $appends = ['price'];
 
     public function invoice(): BelongsTo
     {
@@ -25,5 +30,15 @@ class InvoiceLine extends Model
     public function orderItem(): BelongsTo
     {
         return $this->belongsTo(OrderItem::class);
+    }
+
+    /**
+     * Dynamically present 'price' in decimal format for backwards compatibility.
+     */
+    public function getPriceAttribute()
+    {
+        return array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])
+            ? $this->attributes['price']
+            : ($this->unit_price_cents / 100);
     }
 }

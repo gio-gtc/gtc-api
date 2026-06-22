@@ -186,6 +186,11 @@ class Order extends Model
         );
     }
 
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
     public function getTagsAttribute(): array
     {
         if (!$this->relationLoaded('orderItems')) {

@@ -19,34 +19,40 @@ return new class extends Migration
         // Accounting Invoice Architecture
         Schema::create('invoices', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('organisation_id')->constrained('organisations')->cascadeOnDelete();
-            $table->integer('company_id')->default(1);
-            $table->integer('document_number'); // Sequential plain integer billing tracker
-            $table->string('status')->default('Held'); // Title Case State Standard
-            $table->date('payment_due');
+            $table->foreignId('order_id')->constrained()->onDelete('cascade');
+            $table->foreignId('organisation_id')->constrained(); 
+            $table->string('document_number')->unique();
+            $table->string('status'); // e.g., Held, Unpaid, Paid
+            $table->integer('subtotal_cents');
+            $table->integer('tax_cents')->default(0);
+            $table->integer('total_cents');
+            $table->timestamp('payment_due')->nullable();
             $table->timestamps();
         });
 
         // Snapshot Invoiced Items Mapping
         Schema::create('invoice_lines', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('invoice_id')->constrained('invoices')->cascadeOnDelete();
-            $table->foreignId('order_item_id')->nullable()->constrained('order_items')->nullOnDelete();
-            $table->string('description'); // Allows admin descriptions overrides
-            $table->decimal('price', 10, 2); // Allows admin pricing adjustments
+            $table->foreignId('invoice_id')->constrained()->onDelete('cascade');
+            $table->foreignId('order_item_id')->nullable()->constrained()->onDelete('set null'); 
+            $table->string('description');
+            $table->integer('unit_price_cents');
+            $table->integer('quantity')->default(1);
+            $table->integer('total_cents');
             $table->timestamps();
         });
 
         // Document Number Sequencing Locking Table
         Schema::create('invoice_document_sequences', function (Blueprint $table) {
-            $table->integer('company_id')->primary(); // Shared global mapping base
-            $table->integer('last_document_number')->default(0);
+            $table->id();
+            $table->string('sequence_key')->unique();
+            $table->unsignedBigInteger('last_value')->default(975949); 
             $table->timestamps();
         });
     }
 
     public function down(): void
-    {
+    { 
         Schema::dropIfExists('invoice_document_sequences');
         Schema::dropIfExists('invoice_lines');
         Schema::dropIfExists('invoices');

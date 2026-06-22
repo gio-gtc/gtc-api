@@ -75,10 +75,10 @@ class OrderSubmissionTest extends TestCase
 
         // 5. Initialize the database document sequencing tracker for isolated test checks
         DB::table('invoice_document_sequences')->insert([
-            'company_id'           => 1,
-            'last_document_number' => 100,
-            'created_at'           => now(),
-            'updated_at'           => now(),
+            'sequence_key' => 'invoice',
+            'last_value'   => 975949,
+            'created_at'   => now(),
+            'updated_at'   => now(),
         ]);
     }
 
@@ -141,7 +141,7 @@ class OrderSubmissionTest extends TestCase
 
         // Verify the parent computing fields and invoice details sequence numbers
         $this->assertContains('Unassigned', $response->json('data.order.item_statuses'));
-        $this->assertEquals(101, $response->json('data.invoice.document_number'));
+        $this->assertEquals('975950', $response->json('data.invoice.document_number'));
         $this->assertEquals('Held', $response->json('data.invoice.status'));
 
         // Look up the relational Unassigned lookup record row ID
@@ -154,7 +154,7 @@ class OrderSubmissionTest extends TestCase
         ]);
 
         $this->assertDatabaseHas('invoices', [
-            'document_number' => 101,
+            'document_number' => '975950',
             'status'          => 'Held'
         ]);
     }

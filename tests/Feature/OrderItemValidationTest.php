@@ -9,7 +9,10 @@ use App\Models\OrderMenuItem;
 use App\Models\OrderItemStatus;
 use App\Models\OrderItemBroadcastSpecs;
 use App\Models\OrderItemKeyArtSpecs;
+use App\Models\OrderStatus;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 
 class OrderItemValidationTest extends TestCase
 {
@@ -22,9 +25,24 @@ class OrderItemValidationTest extends TestCase
         // 1. Seed the menu items blueprint mapping configuration
         $this->seed(\Database\Seeders\MenuCatalogSeeder::class);
 
-        // 2. Seed necessary item lifecycle statuses to prevent relationship lookup faults
-        OrderItemStatus::create(['id' => 1, 'name' => 'Still In Cart', 'order_status_id' => 1]);
-        OrderItemStatus::create(['id' => 5, 'name' => 'Cancelled', 'order_status_id' => 1]);
+        // 2. Create the parent OrderStatus record first to satisfy foreign key constraints
+        OrderStatus::create([
+            'id'   => 1,
+            'name' => 'Pending'
+        ]);
+
+        // 3. Seed necessary item lifecycle statuses cleanly without duplicates
+        OrderItemStatus::create([
+            'id'              => 1, 
+            'name'            => 'Still In Cart', 
+            'order_status_id' => 1
+        ]);
+        
+        OrderItemStatus::create([
+            'id'              => 5, 
+            'name'            => 'Cancelled', 
+            'order_status_id' => 1
+        ]);
     }
 
     /** @test */
@@ -33,7 +51,7 @@ class OrderItemValidationTest extends TestCase
         $order = Order::factory()->create();
         $menuItem = OrderMenuItem::where('order_menu_category_id', 1)->first();
 
-        // 🚀 REALIGNED payload string keys to conform with custom blueprint validation rules
+        // REALIGNED payload string keys to conform with custom blueprint validation rules
         $payload = [
             'order_menu_item_id' => $menuItem->id,
             'due_date'           => '2026-06-20',
@@ -56,7 +74,7 @@ class OrderItemValidationTest extends TestCase
             'specifiable_type' => OrderItemBroadcastSpecs::class,
         ]);
 
-        // 🚀 ADDED: Confirms that the child specification row was cleanly separated into its own table
+        // Confirms that the child specification row was cleanly separated into its own table
         $this->assertDatabaseHas('order_item_broadcast_specs', [
             'type'             => 'Generic',
             'cut'              => 'Pre Sale',
@@ -114,30 +132,43 @@ class OrderItemValidationTest extends TestCase
                  ->assertJsonValidationErrors(['specifications.encoding']);
     }
 
-    public function test_it_creates_key_art_line_item_when_w_and_h_are_omitted(): void
+    public function test_it_creates_key_art_line_item_when_w_and_h_are_omitted()
     {
-        $order = Order::factory()->create();
-        $menuItem = OrderMenuItem::where('order_menu_category_id', 4)->firstOrFail();
+        // 1. Arrange: Build contextual matching data
+        /** @var \App\Models\User $user */
+        $user = User::factory()->create();
+        $order = Order::factory()->create(); 
 
+        // This bypasses the API middleware and resolves the 401 error definitively
+        Sanctum::actingAs($user, ['*']);
+
+        // 2. Act: Send the payload
         $response = $this->postJson("/api/orders/{$order->id}/items", [
-            'order_menu_item_id' => $menuItem->id,
-            'due_date' => '2026-06-20',
-            'specifications' => [
+            'due_date'           => '2026-07-15',
+            'order_menu_item_id' => 4, 
+            'specifications'     => [
                 'type' => 'Key Art Package',
             ],
         ]);
 
+        if ($response->status() !== 201) {
+            $response->dump();
+        }
+
+        // 3. Assert
         $response->assertStatus(201);
 
         $this->assertDatabaseHas('order_items', [
-            'order_id' => $order->id,
-            'specifiable_type' => OrderItemKeyArtSpecs::class,
+            'order_id'             => $order->id,
+            'order_menu_item_id'   => 4,
+            'specifiable_type'     => \App\Models\OrderItemKeyArtSpecs::class,
+            'order_item_status_id' => 1, 
         ]);
 
         $this->assertDatabaseHas('order_item_key_art_specs', [
             'type' => 'Key Art Package',
-            'w' => null,
-            'h' => null,
+            'w'    => null,
+            'h'    => null,
         ]);
     }
 

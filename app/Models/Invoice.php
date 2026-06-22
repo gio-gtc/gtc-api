@@ -12,10 +12,13 @@ class Invoice extends Model
     use HasFactory;
 
     protected $fillable = [
+        'order_id', 
         'organisation_id', 
-        'company_id', 
         'document_number', 
         'status', 
+        'subtotal_cents', 
+        'tax_cents', 
+        'total_cents', 
         'payment_due'
     ];
 
