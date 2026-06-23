@@ -87,6 +87,7 @@ class DatabaseSeeder extends Seeder
         // =========================================================================
         $this->call([
             MockOrderSeeder::class, // 🧪 Attaches all factory orders, loops, and assignments
+            InvoiceSeeder::class,
         ]);
     }
 }

@@ -31,7 +31,5 @@ class OrderItemAssigneeSeeder extends Seeder
             // 5. Wire them up via the Eloquent relationship pivot
             $item->assignees()->attach($randomUserIds);
         }
-
-        $this->command->info('Successfully assigned 1-3 creative users to all production and demo order items!');
     }
 }
