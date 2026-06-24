@@ -21,7 +21,7 @@ class InvoiceController extends Controller
             $invoice = DB::transaction(function () use ($order) {
                 $sequenceKey = 'invoice';
 
-                // 1. 🔒 ATOMIC ROW LOCK
+                // 1. ATOMIC ROW LOCK
                 // Forces concurrent invoice generation streams to queue up on this exact key
                 $sequence = DB::table('invoice_document_sequences')
                     ->where('sequence_key', $sequenceKey)

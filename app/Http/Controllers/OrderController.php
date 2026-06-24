@@ -8,7 +8,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Invoice;
-use App\Models\InvoiceLine;
 use App\Models\Tour;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -104,130 +103,130 @@ class OrderController extends Controller
     }
 
     public function submit(Order $order): JsonResponse
-{
-    // 1. Resolve target relational system lookup dictionaries immediately
-    $stillInCartStatus = OrderItemStatus::where('name', 'Still In Cart')->first();
-    $unassignedStatus  = OrderItemStatus::where('name', 'Unassigned')->first();
+    {
+        // 1. Resolve target relational system lookup dictionaries immediately
+        $stillInCartStatus = OrderItemStatus::where('name', 'Still In Cart')->first();
+        $unassignedStatus  = OrderItemStatus::where('name', 'Unassigned')->first();
 
-    // Defensively verify that the order has items to submit using the dictionary lookup ID
-    $cartItems = $order->orderItems()
-        ->where('order_item_status_id', $stillInCartStatus->id)
-        ->get();
-    
-    if ($cartItems->isEmpty()) {
-        return response()->json([
-            'message' => 'Conflict: No items found in cart for this order context.'
-        ], 409);
-    }
-
-    // 2. Wrap operations inside a strict database transaction to ensure atomicity
-    $invoice = DB::transaction(function () use ($order, $cartItems, $unassignedStatus) {
+        // Defensively verify that the order has items to submit using the dictionary lookup ID
+        $cartItems = $order->orderItems()
+            ->where('order_item_status_id', $stillInCartStatus->id)
+            ->get();
         
-        // Step A: Advance line item status pipelines out of the cart state using foreign key IDs
-        foreach ($cartItems as $item) {
-            $item->update([
-                'order_item_status_id' => $unassignedStatus->id
-            ]);
+        if ($cartItems->isEmpty()) {
+            return response()->json([
+                'message' => 'Conflict: No items found in cart for this order context.'
+            ], 409);
         }
 
-        // DEMO GUARD: Showcase blueprints skip billing row compilation entirely
-        if ($order->is_demo) {
-            return null;
-        }
+        // 2. Wrap operations inside a strict database transaction to ensure atomicity
+        $invoice = DB::transaction(function () use ($order, $cartItems, $unassignedStatus) {
+            
+            // Step A: Advance line item status pipelines out of the cart state using foreign key IDs
+            foreach ($cartItems as $item) {
+                $item->update([
+                    'order_item_status_id' => $unassignedStatus->id
+                ]);
+            }
 
-        // Step B: Resolve the client contact's organizational credit terms
-        $clientUser = $order->client; 
-        if (!$clientUser || !$clientUser->organisation_id) {
-            throw new \Exception('Precondition Failed: Order client organization details are unresolved.');
-        }
-        
-        $organisation = $clientUser->organisation;
-        
-        $days = 30;
-        if (!empty($organisation->credit_terms) && preg_match('/\d+/', $organisation->credit_terms, $matches)) {
-            $days = (int) $matches[0];
-        }
-        $paymentDue = Carbon::now()->addDays($days)->format('Y-m-d');
+            // DEMO GUARD: Showcase blueprints skip billing row compilation entirely
+            if ($order->is_demo) {
+                return null;
+            }
 
-        // Step C: Isolated Document Sequencing (Preventing duplicate number selection)
-        $sequenceKey = 'invoice';
+            // Step B: Resolve the client contact's organizational credit terms
+            $clientUser = $order->client; 
+            if (!$clientUser || !$clientUser->organisation_id) {
+                throw new \Exception('Precondition Failed: Order client organization details are unresolved.');
+            }
+            
+            $organisation = $clientUser->organisation;
+            
+            $days = 30;
+            if (!empty($organisation->credit_terms) && preg_match('/\d+/', $organisation->credit_terms, $matches)) {
+                $days = (int) $matches[0];
+            }
+            $paymentDue = Carbon::now()->addDays($days)->format('Y-m-d');
 
-        $sequence = DB::table('invoice_document_sequences')
-            ->where('sequence_key', $sequenceKey)
-            ->lockForUpdate()
-            ->first();
-
-        if (!$sequence) {
-            DB::table('invoice_document_sequences')->insert([
-                'sequence_key' => $sequenceKey,
-                'last_value'   => 975949, // Stays aligned with our 975950 target sequence start
-                'created_at'   => now(),
-                'updated_at'   => now(),
-            ]);
+            // Step C: Isolated Document Sequencing (Preventing duplicate number selection)
+            $sequenceKey = 'invoice';
 
             $sequence = DB::table('invoice_document_sequences')
                 ->where('sequence_key', $sequenceKey)
                 ->lockForUpdate()
                 ->first();
-        }
 
-        $nextValue = $sequence->last_value + 1;
-        $documentNumber = (string)$nextValue;
+            if (!$sequence) {
+                DB::table('invoice_document_sequences')->insert([
+                    'sequence_key' => $sequenceKey,
+                    'last_value'   => 975949, // Stays aligned with our 975950 target sequence start
+                    'created_at'   => now(),
+                    'updated_at'   => now(),
+                ]);
 
-        // Save the counter position back using the new column keys
-        DB::table('invoice_document_sequences')
-            ->where('id', $sequence->id)
-            ->update([
-                'last_value' => $nextValue,
-                'updated_at' => now(),
+                $sequence = DB::table('invoice_document_sequences')
+                    ->where('sequence_key', $sequenceKey)
+                    ->lockForUpdate()
+                    ->first();
+            }
+
+            $nextValue = $sequence->last_value + 1;
+            $documentNumber = (string)$nextValue;
+
+            // Save the counter position back using the new column keys
+            DB::table('invoice_document_sequences')
+                ->where('id', $sequence->id)
+                ->update([
+                    'last_value' => $nextValue,
+                    'updated_at' => now(),
+                ]);
+
+            // Calculate subtotal based strictly on the items currently being submitted from the cart
+            $subtotalCents = $cartItems->sum(fn($item) => (int) (($item->locked_price ?? 0) * 100));
+
+            // Step D: Construct the master Held Invoice entity
+            $invoice = Invoice::create([
+                'order_id'         => $order->id,
+                // Safe fallback sequence checking organization from the current user or order client
+                'organisation_id'  => Auth::user()?->organisation_id ?? $clientUser->organisation_id,
+                'document_number'  => $documentNumber,
+                'status'           => 'Held',
+                'subtotal_cents'   => $subtotalCents,
+                'tax_cents'        => 0, 
+                'total_cents'      => $subtotalCents,
+                'payment_due'      => $paymentDue,
             ]);
 
-        // Calculate subtotal based strictly on the items currently being submitted from the cart
-        $subtotalCents = $cartItems->sum(fn($item) => (int) (($item->locked_price ?? 0) * 100));
+            // Steps D & E Consolidated: Build immutable ledger lines and update item reference pointers
+            foreach ($cartItems as $item) {
+                $itemPriceCents = (int) (($item->locked_price ?? 0) * 100);
 
-        // Step D: Construct the master Held Invoice entity
-        $invoice = Invoice::create([
-            'order_id'         => $order->id,
-            // Safe fallback sequence checking organization from the current user or order client
-            'organisation_id'  => Auth::user()?->organisation_id ?? $clientUser->organisation_id,
-            'document_number'  => $documentNumber,
-            'status'           => 'Held',
-            'subtotal_cents'   => $subtotalCents,
-            'tax_cents'        => 0, 
-            'total_cents'      => $subtotalCents,
-            'payment_due'      => $paymentDue,
-        ]);
+                $invoiceLine = $invoice->lines()->create([
+                    'order_item_id'    => $item->id,
+                    'description'      => $item->orderMenuItem?->name ?? $item->description ?? 'Creative Deliverable Asset Production Stop',
+                    'unit_price_cents' => $itemPriceCents,
+                    'quantity'         => 1,
+                    'total_cents'      => $itemPriceCents,
+                ]);
 
-        // Steps D & E Consolidated: Build immutable ledger lines and update item reference pointers
-        foreach ($cartItems as $item) {
-            $itemPriceCents = (int) (($item->locked_price ?? 0) * 100);
+                // Track relation reference links directly within item lineage audit structures
+                $item->update([
+                    'invoice_line_id' => $invoiceLine->id
+                ]);
+            }
 
-            $invoiceLine = $invoice->lines()->create([
-                'order_item_id'    => $item->id,
-                'description'      => $item->orderMenuItem?->name ?? $item->description ?? 'Creative Deliverable Asset Production Stop',
-                'unit_price_cents' => $itemPriceCents,
-                'quantity'         => 1,
-                'total_cents'      => $itemPriceCents,
-            ]);
+            return $invoice;
+        });
 
-            // Track relation reference links directly within item lineage audit structures
-            $item->update([
-                'invoice_line_id' => $invoiceLine->id
-            ]);
-        }
-
-        return $invoice;
-    });
-
-    // 3. Return payload enveloped matching unified response rules
-    return response()->json([
-        'message' => 'Order submitted successfully.',
-        'data'    => [
-            'order'   => $order->load('orderItems'),
-            'invoice' => $invoice ? $invoice->load('lines') : null
-        ]
-    ], 200);
-}
+        // 3. Return payload enveloped matching unified response rules
+        return response()->json([
+            'message' => 'Order submitted successfully.',
+            'data'    => [
+                'order'   => $order->load('orderItems'),
+                'invoice' => $invoice ? $invoice->load('lines') : null
+            ]
+        ], 200);
+    }
 
     /**
      * Display the specified parent order with complete nested relationship detail trees.
@@ -260,8 +259,8 @@ class OrderController extends Controller
         $user = $request->user();
         
         $ordersQuery = Order::select([
-                'id', 'uuid', 'tour_id', 'venue_id', 'ordered_by_id', 
-                'is_demo', 'submitted_at', 'due_date', 'created_at', 'updated_at'
+                'id', 'tour_id', 'venue_id', 'ordered_by_id', 
+                'is_demo', 'submitted_at', 'due_date'
             ])
             ->where('tour_id', $tour->id)
             ->with([
@@ -269,13 +268,75 @@ class OrderController extends Controller
                 'client:id,first_name,last_name,email,organisation_id',
                 'client.organisation:id,name,country_id',
                 'client.organisation.country:id,code',
-                'showDates:id,order_id,show_date',
-                'orderItems:id,order_id,order_menu_item_id,order_item_status_id,locked_price,due_date,revision_number,specifiable_id,specifiable_type,asset_path',
-                'orderItems.statusLookup:id,name,order_status_id',
-                'orderItems.statusLookup.orderStatus:id,name',
-                'orderItems.assignees:id,first_name,last_name,email,avatar',
                 'statuses:id,name'
             ]);
+
+        $orders = $ordersQuery->latest()->get();
+        $orderIds = $orders->pluck('id');
+
+        if ($orderIds->isNotEmpty()) {
+            
+            // 2. Optimized Flat Lookup: Collaborators Map
+            $collaboratorsMap = DB::table('users')
+                ->join('order_item_assignee', 'users.id', '=', 'order_item_assignee.user_id')
+                ->join('order_items', 'order_item_assignee.order_item_id', '=', 'order_items.id')
+                ->whereIn('order_items.order_id', $orderIds)
+                ->select([
+                    'users.id',
+                    'users.first_name',
+                    'users.last_name',
+                    'users.avatar',
+                    'order_items.order_id'
+                ])
+                ->distinct()
+                ->get()
+                ->groupBy('order_id');
+
+            // 3. Optimized Flat Lookup: Menu Category Tags Map
+            // (Assumes your menu items table is named 'order_menu_items'. Adjust if different!)
+            $categoryMap = DB::table('order_items')
+                ->join('order_menu_items', 'order_items.order_menu_item_id', '=', 'order_menu_items.id')
+                ->whereIn('order_items.order_id', $orderIds)
+                ->select([
+                    'order_items.order_id',
+                    'order_menu_items.order_menu_category_id'
+                ])
+                ->distinct()
+                ->get()
+                ->groupBy('order_id');
+
+            // 4. Single-pass loop to hydrate our flat layout arrays straight to the root payload
+            foreach ($orders as $order) {
+                
+                // Map Collaborators
+                $order->collaborators = $collaboratorsMap->get($order->id, collect())->map(function ($user) {
+                    return [
+                        'id'         => $user->id,
+                        'first_name' => $user->first_name,
+                        'last_name'  => $user->last_name,
+                        'avatar'     => $user->avatar,
+                    ];
+                })->values();
+
+                // Compute Flat Tags Array on the fly using category logic
+                $orderCategoryIds = $categoryMap->get($order->id, collect())->pluck('order_menu_category_id')->toArray();
+                
+                $tags = [];
+                // Categories 1, 2, 3 translate to 'Audio' tags
+                if (count(array_intersect($orderCategoryIds, [1, 2, 3])) > 0) {
+                    $tags[] = 'Audio';
+                }
+                // Category 4 translates to 'Art' tags
+                if (in_array(4, $orderCategoryIds)) {
+                    $tags[] = 'Art';
+                }
+
+                $order->tags = $tags;
+
+                $order->unsetRelation('orderItems');
+                $order->makeHidden(['orderItems', 'order_items']);
+            }
+        }
 
         // Apply the "My Tasks" row pruning strategy
         if ($request->query('filter') === 'my-tasks') {
@@ -341,7 +402,6 @@ class OrderController extends Controller
             });
         }
 
-        $orders = $ordersQuery->latest()->get();
         return response()->json(['data' => $orders], 200);
     }
 
