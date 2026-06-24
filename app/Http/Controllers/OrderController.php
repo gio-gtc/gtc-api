@@ -243,7 +243,11 @@ class OrderController extends Controller
             'orderItems.orderMenuItem.category',
             'orderItems.assignees',
             'orderItems.statusLookup', 
-            'orderItems.specifiable'
+            'orderItems.specifiable',
+            'invoices' => function($query) {
+                $query->select(['id', 'order_id', 'document_number', 'status', 'subtotal_cents', 'tax_cents', 'total_cents', 'payment_due'])
+                    ->with('lines');
+            }
         ]);
 
         return response()->json([
