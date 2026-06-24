@@ -40,51 +40,50 @@ class InvoiceSeeder extends Seeder
 
             $currentNumber++;
             
-            // 35% chance to remain 'Held' with a null due date, otherwise finalized and due
-            $isHeld = rand(1, 100) <= 35;
-            $status = $isHeld ? 'Held' : collect(['Unpaid', 'Sent', 'Paid'])->random();
+            // 65% chance to remain 'Held' with a null due date, otherwise finalized and due
+            $isHeld = rand(1, 100) <= 65;
+            $status = $isHeld ? 'Held' : collect(['Unpaid', 'Paid'])->random();
             $dueDate = $isHeld ? null : Carbon::now()->addDays(30)->format('Y-m-d');
 
-            $invoiceSubtotalCents = 0;
+            $invoiceSubtotal = 0.00;
             $calculatedLines = [];
 
             foreach ($order->orderItems as $item) {
-                $rawPrice = $item->locked_price ?? rand(75, 450);
-                $unitPriceCents = (int) ($rawPrice * 100);
+                $unitPrice = (float) ($item->locked_price ?? rand(75, 450));
                 $quantity = 1; 
-                $lineTotalCents = $unitPriceCents * $quantity;
+                $lineTotal = $unitPrice * $quantity;
 
                 $calculatedLines[] = [
-                    'item'             => $item,
-                    'description'      => OrderItemBillingReference::fromOrderItem($item),
-                    'unit_price_cents' => $unitPriceCents,
-                    'quantity'         => $quantity,
-                    'total_cents'      => $lineTotalCents,
+                    'item'        => $item,
+                    'description' => OrderItemBillingReference::fromOrderItem($item),
+                    'unit_price'  => $unitPrice,
+                    'quantity'    => $quantity,
+                    'total'       => $lineTotal,
                 ];
 
-                $invoiceSubtotalCents += $lineTotalCents;
+                $invoiceSubtotal += $lineTotal;
             }
 
             // Construct the master Invoice
             $invoice = Invoice::create([
-                'order_id'         => $order->id,
-                'organisation_id'  => $order->organisation_id ?? $order->client?->organisation_id ?? 1,
-                'document_number'  => (string) $currentNumber,
-                'status'           => $status,
-                'subtotal_cents'   => $invoiceSubtotalCents,
-                'tax_cents'        => 0,
-                'total_cents'      => $invoiceSubtotalCents,
-                'payment_due'      => $dueDate, 
-                'created_at'       => Carbon::now()->subDays(rand(1, 30)), 
+                'order_id'        => $order->id,
+                'organisation_id' => $order->organisation_id ?? $order->client?->organisation_id ?? 1,
+                'document_number' => (string) $currentNumber,
+                'status'          => $status,
+                'subtotal'        => $invoiceSubtotal,
+                'tax'             => 0.00,
+                'total'           => $invoiceSubtotal,
+                'payment_due'     => $dueDate, 
+                'created_at'      => Carbon::now()->subDays(rand(1, 30)), 
             ]);
 
             foreach ($calculatedLines as $lineData) {
                 $invoiceLine = $invoice->lines()->create([
-                    'order_item_id'    => $lineData['item']->id,
-                    'description'      => $lineData['description'],
-                    'unit_price_cents' => $lineData['unit_price_cents'],
-                    'quantity'         => $lineData['quantity'],
-                    'total_cents'      => $lineData['total_cents'],
+                    'order_item_id' => $lineData['item']->id,
+                    'description'   => $lineData['description'],
+                    'unit_price'    => $lineData['unit_price'],
+                    'quantity'      => $lineData['quantity'],
+                    'total'         => $lineData['total'],
                 ]);
 
                 $lineData['item']->update([

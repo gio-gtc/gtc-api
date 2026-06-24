@@ -62,7 +62,6 @@ class InvoiceController extends Controller
                     $nextValue = $sequence->last_value + 1;
                     $documentNumber = (string)$nextValue;
 
-                    // Update central sequence pointer tracking index checkpoint
                     DB::table('invoice_document_sequences')
                         ->where('id', $sequence->id)
                         ->update([
@@ -70,47 +69,64 @@ class InvoiceController extends Controller
                             'updated_at' => now(),
                         ]);
 
-                    // Generate master baseline tracking ledger shell
+                    // Generate a master baseline tracking ledger shell
                     $invoice = Invoice::create([
                         'order_id'         => $order->id,
-                        'organisation_id'  => $order->organisation_id,
+                        'organisation_id'  => $order->organisation_id ?? $order->client?->organisation_id ?? 1,
                         'document_number'  => $documentNumber,
                         'status'           => 'Held',
-                        'subtotal_cents'   => 0,
-                        'tax_cents'        => 0,
-                        'total_cents'      => 0,
+                        'subtotal'         => 0.00, 
+                        'tax'              => 0.00,
+                        'total'            => 0.00,
                         'payment_due'      => null,
                     ]);
                 }
 
-                $newItemsTotalCents = 0;
+                $newItemsTotal = 0.00;
 
                 // 3. Clone item configuration mappings over to immutable lines
                 foreach ($cartItems as $item) {
-                    $itemPriceCents = (int)($item->locked_price * 100);
+                    $itemPrice = (float) $item->locked_price;
 
-                    // Write row directly to the assigned invoice instance using your dedicated reference class ⚡
                     $invoiceLine = $invoice->lines()->create([
-                        'order_item_id'    => $item->id,
-                        'description'      => OrderItemBillingReference::fromOrderItem($item),
-                        'unit_price_cents' => $itemPriceCents,
-                        'quantity'         => 1,
-                        'total_cents'      => $itemPriceCents,
+                        'order_item_id' => $item->id,
+                        'description'   => OrderItemBillingReference::fromOrderItem($item),
+                        'unit_price'    => $itemPrice,
+                        'quantity'      => 1,
+                        'total'         => $itemPrice,
                     ]);
 
-                    $newItemsTotalCents += $itemPriceCents;
+                    $newItemsTotal += $itemPrice;
 
-                    // Push items into production stream (Status 2 = Unassigned) and map line reference
+                    // ⚡ Path A is open to ALL items. If a Radio (Audio) or Key Art (Static) item 
+                    // ever includes an encoding payload array down the line, this will catch and process it.
+                    $spec = $item->specifiable;
+                    if ($spec && isset($spec->encoding) && is_array($spec->encoding) && count($spec->encoding) > 0) {
+                        $encodingCount = count($spec->encoding);
+                        $pricePerTarget = 50.00; 
+                        $totalEncoding = $pricePerTarget * $encodingCount;
+
+                        $invoice->lines()->create([
+                            'order_item_id' => $item->id,
+                            'description'   => 'Encoding',
+                            'unit_price'    => $pricePerTarget,
+                            'quantity'      => $encodingCount,
+                            'total'         => $totalEncoding,
+                        ]);
+
+                        $newItemsTotal += $totalEncoding;
+                    }
+
                     $item->update([
                         'order_item_status_id' => 2,
                         'invoice_line_id'      => $invoiceLine->id
                     ]);
                 }
 
-                // 4. Update parent invoice totals (handles new builds vs appending merges seamlessly)
+                // 4. Update parent invoice totals seamlessly
                 $invoice->update([
-                    'subtotal_cents' => $invoice->subtotal_cents + $newItemsTotalCents,
-                    'total_cents'    => $invoice->total_cents + $newItemsTotalCents,
+                    'subtotal' => $invoice->subtotal + $newItemsTotal,
+                    'total'    => $invoice->total + $newItemsTotal,
                 ]);
 
                 // 5. Synchronize system workflow logic flags up to the parent order container

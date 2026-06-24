@@ -16,6 +16,7 @@ class MenuCatalogSeeder extends Seeder
                     'name' => 'Broadcast & Streaming Video Details',
                     'price' => 1200.00,
                     'tags' => ['Audio'],
+                    'billing_code' => 'Video',
                     'blueprint' => [
                         'encodings' => [
                             "H264-MP4 (Online or Venue)", 
@@ -61,6 +62,7 @@ class MenuCatalogSeeder extends Seeder
                     'name' => 'Social Platform Video Details',
                     'price' => 350.00,
                     'tags' => ['Audio'],
+                    'billing_code' => 'Video',
                     'blueprint' => [
                         'types' => ['Social - 16:9', 'FB/IG Story', 'TikTok', 'Social Square', 'Social - 4:5'],
                         'cuts' => ['Pre Sale', 'On Sale Now', 'Evergreen', 'Sign Up Now'],
@@ -76,6 +78,7 @@ class MenuCatalogSeeder extends Seeder
                     'name' => 'Radio Details',
                     'price' => 300.00,
                     'tags' => ['Audio'],
+                    'billing_code' => 'Audio',
                     'blueprint' => [
                         'types' => ["Generic", "AmEx", "Verizon", "Citi", "International"],
                         'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of', 'International Radio Package'],
@@ -90,6 +93,7 @@ class MenuCatalogSeeder extends Seeder
                     'name' => 'Key Art & Static Assets Details',
                     'price' => 800.00,
                     'tags' => ['Art'],
+                    'billing_code' => 'Static',
                     'blueprint' => [
                         'types' => ['Key Art Package', 'Socials & Web Banners', 'International Key art & Social Package']
                     ]
@@ -112,6 +116,7 @@ class MenuCatalogSeeder extends Seeder
                         'name'                   => $item['name']
                     ],
                     [
+                        'billing_code'           => $item['billing_code'],
                         'default_price'          => $item['price'],
                         'form_blueprint'         => $item['blueprint']
                     ]

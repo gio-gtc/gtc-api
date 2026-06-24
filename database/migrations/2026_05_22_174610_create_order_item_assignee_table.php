@@ -23,9 +23,9 @@ return new class extends Migration
             $table->foreignId('organisation_id')->constrained(); 
             $table->string('document_number')->unique();
             $table->string('status'); // e.g., Held, Unpaid, Paid
-            $table->integer('subtotal_cents');
-            $table->integer('tax_cents')->default(0);
-            $table->integer('total_cents');
+            $table->decimal('subtotal', 10, 2);
+            $table->decimal('tax', 10, 2)->default(0.00);
+            $table->decimal('total', 10, 2);
             $table->timestamp('payment_due')->nullable();
             $table->timestamps();
         });
@@ -34,11 +34,11 @@ return new class extends Migration
         Schema::create('invoice_lines', function (Blueprint $table) {
             $table->id();
             $table->foreignId('invoice_id')->constrained()->onDelete('cascade');
-            $table->foreignId('order_item_id')->nullable()->constrained()->onDelete('set null'); 
+            $table->foreignId('order_item_id')->constrained()->onDelete('cascade');
             $table->string('description');
-            $table->integer('unit_price_cents');
+            $table->decimal('unit_price', 10, 2);
             $table->integer('quantity')->default(1);
-            $table->integer('total_cents');
+            $table->decimal('total', 10, 2);
             $table->timestamps();
         });
 

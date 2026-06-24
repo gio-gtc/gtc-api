@@ -29,6 +29,8 @@ class OrderItem extends Model
 
     protected $with = ['specifiable', 'statusLookup'];
 
+    protected $appends = ['encoding_surcharge', 'estimated_total'];
+
     protected $casts = [
         'locked_price' => 'decimal:2',
     ];
@@ -119,5 +121,28 @@ class OrderItem extends Model
     public function rejectionReason()
     {
         return $this->hasOne(OrderItemRevision::class, 'old_order_item_id');
+    }
+
+    /**
+     * Calculate the encoding surcharge for this item as a decimal.
+     */
+    public function getEncodingSurchargeAttribute(): float
+    {
+        $spec = $this->specifiable;
+        
+        if ($spec && isset($spec->encoding) && is_array($spec->encoding)) {
+            $pricePerTarget = 50.00; // $50.00 flat per distribution platform
+            return count($spec->encoding) * $pricePerTarget;
+        }
+
+        return 0.00;
+    }
+
+    /**
+     * Calculate the true total estimated cost of this line item as a decimal.
+     */
+    public function getEstimatedTotalAttribute(): float
+    {
+        return (float)$this->locked_price + $this->encoding_surcharge;
     }
 }
