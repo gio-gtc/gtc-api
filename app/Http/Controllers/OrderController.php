@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Invoice;
 use App\Models\OrderItem;
 use App\Models\Tour;
+use App\Support\OrderItemBillingReference;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
@@ -112,6 +113,7 @@ class OrderController extends Controller
         // Defensively verify that the order has items to submit using the dictionary lookup ID
         $cartItems = $order->orderItems()
             ->where('order_item_status_id', $stillInCartStatus->id)
+            ->with('orderMenuItem')
             ->get();
         
         if ($cartItems->isEmpty()) {
@@ -204,7 +206,7 @@ class OrderController extends Controller
 
                 $invoiceLine = $invoice->lines()->create([
                     'order_item_id'    => $item->id,
-                    'description'      => $item->orderMenuItem?->name ?? $item->description ?? 'Creative Deliverable Asset Production Stop',
+                    'description'      => OrderItemBillingReference::fromOrderItem($item),
                     'unit_price_cents' => $itemPriceCents,
                     'quantity'         => 1,
                     'total_cents'      => $itemPriceCents,

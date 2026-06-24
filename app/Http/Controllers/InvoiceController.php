@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Invoice;
 use App\Models\OrderItem;
+use App\Support\OrderItemBillingReference;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +61,7 @@ class InvoiceController extends Controller
                     ->whereHas('statusLookup', function ($query) {
                         $query->where('name', 'Still In Cart');
                     })
-                    ->with('specifiable')
+                    ->with(['specifiable', 'orderMenuItem'])
                     ->get();
 
                 if ($cartItems->isEmpty()) {
@@ -85,20 +86,9 @@ class InvoiceController extends Controller
 
                 // 7. Clone data snapshot configurations over to immutable ledger sublines
                 foreach ($cartItems as $item) {
-                    $spec = $item->specifiable;
-                    
-                    // Build format-aware descriptive strings dynamically
-                    $description = class_basename($item->specifiable_type);
-                    if ($spec && isset($spec->type)) {
-                        $description .= " - {$spec->type}";
-                    }
-                    if ($spec && isset($spec->cut)) {
-                        $description .= " ({$spec->cut})";
-                    }
-
                     $invoice->lines()->create([
                         'order_item_id'    => $item->id,
-                        'description'      => $description,
+                        'description'      => OrderItemBillingReference::fromOrderItem($item),
                         'unit_price_cents' => (int)($item->locked_price * 100),
                         'quantity'         => 1,
                         'total_cents'      => (int)($item->locked_price * 100),

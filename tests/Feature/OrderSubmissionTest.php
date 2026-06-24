@@ -143,6 +143,10 @@ class OrderSubmissionTest extends TestCase
         $this->assertContains('Unassigned', $response->json('data.order.item_statuses'));
         $this->assertEquals('975950', $response->json('data.invoice.document_number'));
         $this->assertEquals('Held', $response->json('data.invoice.status'));
+        $this->assertEquals(
+            'Broadcast TV Spot Main Event Teaser :30',
+            $response->json('data.invoice.lines.0.description')
+        );
 
         // Look up the relational Unassigned lookup record row ID
         $unassignedStatus = OrderItemStatus::where('name', 'Unassigned')->first();
