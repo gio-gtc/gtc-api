@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/submit', [OrderController::class, 'submit'])->name('orders.submit');
     Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
     Route::post('orders/{order}/invoices', [InvoiceController::class, 'store'])->name('orders.invoices.store');
+    Route::delete('/orders/{order}/cart', [OrderController::class, 'clearCart'])->name('orders.clear-cart');
     Route::delete('order-items/{orderItem}', [OrderItemController::class, 'destroy'])->name('order-items.destroy');
     Route::patch('order-items/{orderItem}', [OrderItemController::class, 'update'])->name('order-items.update');
     Route::post('order-items/bulk-update', [OrderItemController::class, 'bulkUpdate'])->name('order-items.bulk-update');

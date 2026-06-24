@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Invoice;
+use App\Models\OrderItem;
 use App\Models\Tour;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -447,6 +448,48 @@ class OrderController extends Controller
         return response()->json([
             'message' => 'Order workspace and show dates successfully synchronized.',
             'data'    => $order->fresh(['showDates'])
+        ], 200);
+    }
+
+    /**
+     * Clear all unsubmitted "Still In Cart" items from the specified order.
+     */
+    public function clearCart(Order $order): JsonResponse
+    {
+        // 1. Resolve the status lookup dictionary ID
+        $stillInCartStatus = OrderItemStatus::where('name', 'Still In Cart')->first();
+
+        if (!$stillInCartStatus) {
+            return response()->json([
+                'message' => 'System Error: "Still In Cart" status dictionary could not be resolved.'
+            ], 500);
+        }
+
+        // 2. Perform a bulk batch delete on matching items
+        $deletedCount = $order->orderItems()
+            ->where('order_item_status_id', $stillInCartStatus->id)
+            ->delete();
+
+        if ($deletedCount === 0) {
+            return response()->json([
+                'message' => 'Conflict: No items marked "Still In Cart" were found in this order context.'
+            ], 409);
+        }
+
+        // 3. Clean up: If this order has zero items left completely, drop the empty order container
+        if ($order->orderItems()->count() === 0) {
+            $order->delete();
+            return response()->json([
+                'message' => "Successfully removed {$deletedCount} items and cleared empty order shell.",
+                'order_deleted' => true,
+                'count' => $deletedCount
+            ], 200);
+        }
+
+        return response()->json([
+            'message' => "Successfully cleared {$deletedCount} unsubmitted items from the cart.",
+            'order_deleted' => false,
+            'count' => $deletedCount
         ], 200);
     }
 }
