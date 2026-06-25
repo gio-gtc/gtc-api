@@ -132,37 +132,41 @@ class OrderItem extends Model
             return 0.00;
         }
 
-        $stillInCartId = OrderItemStatus::where('name', 'Still In Cart')->first()?->id;
+        $stillInCartId = \App\Models\OrderItemStatus::where('name', 'Still In Cart')->first()?->id;
         if (!$stillInCartId) return 0.00;
 
-        // Gather all video components currently waiting in the draft cart
         $sisterVideoItems = self::where('order_id', $this->order_id)
             ->where('order_item_status_id', $stillInCartId)
-            ->with('specifiable')
+            ->with(['specifiable', 'orderMenuItem'])
             ->get();
 
+        // Replicate the exact same pooling rules for the sandbox environment matrix simulation
         $globalEncodingPlatforms = collect();
         foreach ($sisterVideoItems as $item) {
-            if ($item->specifiable && isset($item->specifiable->encoding) && is_array($item->specifiable->encoding)) {
-                foreach ($item->specifiable->encoding as $platform) {
-                    $globalEncodingPlatforms->push($platform);
+            $isSocial = str_contains(strtolower($item->orderMenuItem?->name ?? ''), 'social');
+            
+            if ($isSocial) {
+                $globalEncodingPlatforms->push("Social-Default-Item-{$item->id}");
+            } else {
+                if ($item->specifiable && isset($item->specifiable->encoding) && is_array($item->specifiable->encoding)) {
+                    foreach ($item->specifiable->encoding as $platform) {
+                        $globalEncodingPlatforms->push($platform);
+                    }
                 }
             }
         }
 
-        $totalUniqueEncodings = $globalEncodingPlatforms->unique()->count();
-        if ($totalUniqueEncodings === 0) return 0.00;
+        $totalEncodingsCount = $globalEncodingPlatforms->count();
+        if ($totalEncodingsCount === 0) return 0.00;
 
-        // Read variables straight from the database row 🧠
         $matrix = $this->orderMenuItem?->pricing_matrix ?? [];
         $baseBundlePrice = (float) ($matrix['base_encoding_bundle'] ?? 250.00);
         $additionalPrice = (float) ($matrix['additional_encoding'] ?? 75.00);
 
-        $totalPoolCost = $totalUniqueEncodings <= 2 
+        $totalPoolCost = $totalEncodingsCount <= 2 
             ? $baseBundlePrice 
-            : $baseBundlePrice + (($totalUniqueEncodings - 2) * $additionalPrice);
+            : $baseBundlePrice + (($totalEncodingsCount - 2) * $additionalPrice);
 
-        // Distribute an even split across the active cart item rows for clear view matching
         return round($totalPoolCost / $sisterVideoItems->count(), 2);
     }
 

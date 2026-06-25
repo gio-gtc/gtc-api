@@ -3,14 +3,13 @@
 namespace App\Services\Pricing;
 
 use App\Models\Order;
-use App\Models\OrderItemBillingReference;
-use App\Support\OrderItemBillingReference as SupportOrderItemBillingReference;
+use App\Support\OrderItemBillingReference;
 use Illuminate\Support\Collection;
 
 class VideoPricingCalculator
 {
     /**
-     * Calculate all lines and costs for video items within an order.
+     * Compute itemized lines using the database-driven catalog matrix parameters.
      */
     public function calculate(Order $order, Collection $videoItems): array
     {
@@ -22,19 +21,20 @@ class VideoPricingCalculator
         foreach ($videoItems as $item) {
             $menuItem = $item->orderMenuItem;
             $matrix = $menuItem?->pricing_matrix ?? [];
-            $description = SupportOrderItemBillingReference::fromOrderItem($item);
+            $description = OrderItemBillingReference::fromOrderItem($item);
             $spec = $item->specifiable;
 
             if (!$spec) {
                 continue;
             }
 
-            // A. Revision Scanner: Pulls price from DB matrix row if item is an asset correction loop
+            // A. Revision Scanner
             if (!empty($spec->isci) && preg_match('/R\d+$/i', $spec->isci)) {
                 $unitPrice = (float) ($matrix['revision_price'] ?? 275.00);
                 $description = 'Revision';
             } 
-            // B. Unique Cut Engine: Pulls first vs additional cut prices straight from matrix parameters
+
+            // B. Unique Cut Engine
             else {
                 $cutSignature = implode('-', [
                     $spec->type ?? 'default',
@@ -60,24 +60,34 @@ class VideoPricingCalculator
                 'total'         => $unitPrice,
             ];
 
-            // Accumulate delivery targets into our global order calculation pool
-            if (isset($spec->encoding) && is_array($spec->encoding)) {
-                foreach ($spec->encoding as $platform) {
-                    $globalEncodingPlatforms->push($platform);
+            // C. Unified Encoding Pooling Rule
+            $isSocial = str_contains(strtolower($menuItem?->name ?? ''), 'social');
+
+            if ($isSocial) {
+                // Social video automatically gets 1 unique encoding by default per item
+                $globalEncodingPlatforms->push("Social-Default-Item-{$item->id}");
+            } else {
+                // Broadcast gets the unique platforms explicitly selected for the item
+                if (isset($spec->encoding) && is_array($spec->encoding)) {
+                    foreach ($spec->encoding as $platform) {
+                        $globalEncodingPlatforms->push($platform);
+                    }
                 }
             }
         }
 
         // Pass 2: Build Order-Wide Bundled Encoding Breakouts
-        $totalUniqueEncodings = $globalEncodingPlatforms->unique()->count();
+        // Using unique() ensures duplicate broadcast selections merge, while social items stay distinct
+        $totalEncodingsCount = $globalEncodingPlatforms->count();
         $primaryVideoItem = $videoItems->first();
 
-        if ($primaryVideoItem && $totalUniqueEncodings > 0) {
+        if ($primaryVideoItem && $totalEncodingsCount > 0) {
             $videoMatrix = $primaryVideoItem->orderMenuItem?->pricing_matrix ?? [];
             $baseBundlePrice = (float) ($videoMatrix['base_encoding_bundle'] ?? 250.00);
             $additionalPrice = (float) ($videoMatrix['additional_encoding'] ?? 75.00);
 
-            if ($totalUniqueEncodings === 1) {
+            // Tier 1: Exactly 1 encoding exists total
+            if ($totalEncodingsCount === 1) {
                 $lines[] = [
                     'order_item_id' => $primaryVideoItem->id,
                     'description'   => 'Encoding',
@@ -85,8 +95,11 @@ class VideoPricingCalculator
                     'quantity'      => 1,
                     'total'         => $baseBundlePrice,
                 ];
-            } else {
-                // Break out the 2-pack bundle into itemized lines ($250 and $0) as requested
+            } 
+
+            // Tier 2 & 3: 2 or more encodings exist
+            else {
+                // Package Bundle allocation rows ($250 and $0)
                 $lines[] = [
                     'order_item_id' => $primaryVideoItem->id,
                     'description'   => 'Encoding',
@@ -102,9 +115,9 @@ class VideoPricingCalculator
                     'total'         => 0.00,
                 ];
 
-                // Append any overflow items at the standard additional matrix unit price
-                if ($totalUniqueEncodings > 2) {
-                    $extraCount = $totalUniqueEncodings - 2;
+                // Tier 3 Overflow: Add individual $75 lines for elements over the base bundle limit.
+                if ($totalEncodingsCount > 2) {
+                    $extraCount = $totalEncodingsCount - 2;
                     for ($i = 0; $i < $extraCount; $i++) {
                         $lines[] = [
                             'order_item_id' => $primaryVideoItem->id,
