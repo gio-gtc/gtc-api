@@ -16,7 +16,6 @@ class OrderItemFactory extends Factory
     public function definition(): array
     {
         // Establish the order right away so we can safely check if it's a demo
-        $order = Order::inRandomOrder()->first() ?? Order::factory()->create();
         $menuItem = OrderMenuItem::inRandomOrder()->first() ?? OrderMenuItem::factory()->create();
         
         // 1. Relational Status Lookup Engine
@@ -59,15 +58,21 @@ class OrderItemFactory extends Factory
             }
         }
 
-        // 4. Conditional Demo Shell Values
-        $finalStatusId = $order->is_demo ? null : $statusRecord->id;
-        $finalDueDate = $order->is_demo ? null : now()->addWeeks(2)->format('Y-m-d');
+        $matrix = $menuItem->pricing_matrix ?? [];
+
+        // Determine initial base contract entry rate from the matrix
+        if ($menuItem->billing_code === 'Video') {
+            $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 575.00);
+        } else {
+            // For Audio/Static categories, look up their custom base rates
+            $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 0.01);
+        }
 
         return [
             'order_id'             => Order::factory(),
             'order_menu_item_id'   => OrderMenuItem::factory(),
             'order_item_status_id' => 1,
-            'locked_price'         => $this->faker->randomElement([150.00, 250.00, 500.00]),
+            'locked_price'         => $initialLockedPrice ?? 00.03,
             'due_date'             => $this->faker->dateTimeBetween('+1 week', '+1 month')->format('Y-m-d'),
             'revision_number'      => 0,            
             'specifiable_id'       => null,

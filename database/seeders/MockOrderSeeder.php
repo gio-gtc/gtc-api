@@ -158,6 +158,16 @@ class MockOrderSeeder extends Seeder
                     default => throw new Exception("Unknown item type: {$itemType}"),
                 };
 
+                $matrix = $menuItem->pricing_matrix ?? [];
+
+                // Determine initial base contract entry rate from the matrix
+                if ($menuItem->billing_code === 'Video') {
+                    $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 575.00);
+                } else {
+                    // For Audio/Static categories, look up their custom base rates
+                    $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 0.01);
+                }
+
                 // Create the spec and link to order item
                 $spec = $modelClass::create($specData);
 
@@ -166,7 +176,7 @@ class MockOrderSeeder extends Seeder
                     'order_id'             => $order->id,
                     'order_menu_item_id'   => $menuItem->id,
                     'order_item_status_id' => $allocatedStatusId,
-                    'locked_price'         => $menuItem->default_price,
+                    'locked_price'         => $initialLockedPrice ?? 0.02,
                     'due_date'             => now()->addDays(rand(5, 25))->format('Y-m-d'),
                     'specifiable_id'       => $spec->id,
                     'specifiable_type'     => $modelClass,

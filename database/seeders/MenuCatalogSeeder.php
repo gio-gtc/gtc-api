@@ -14,7 +14,6 @@ class MenuCatalogSeeder extends Seeder
             'Broadcast & Streaming Video' => [
                 [
                     'name' => 'Broadcast & Streaming Video Details',
-                    'price' => 1200.00,
                     'tags' => ['Audio'],
                     'billing_code' => 'Video',
                     'blueprint' => [
@@ -53,6 +52,14 @@ class MenuCatalogSeeder extends Seeder
                                 'languages' => ['English']
                             ]
                         ]
+                    ],
+                    'pricing_matrix' => [
+                        'first_cut_price'        => 575.00,
+                        'additional_cut_price'   => 275.00,
+                        'revision_price'         => 275.00,
+                        'base_encoding_bundle'   => 250.00,
+                        'base_encoding_limit'    => 2,
+                        'additional_encoding'    => 75.00,
                     ]
                 ]
             ],
@@ -60,7 +67,6 @@ class MenuCatalogSeeder extends Seeder
             'Social Video' => [
                 [
                     'name' => 'Social Platform Video Details',
-                    'price' => 350.00,
                     'tags' => ['Audio'],
                     'billing_code' => 'Video',
                     'blueprint' => [
@@ -69,6 +75,14 @@ class MenuCatalogSeeder extends Seeder
                         'card_holders' => ["Amex", "Citi"],
                         'durations' => [10, 15, 30],
                         'languages' => ['English', 'Spanish', 'French']
+                    ],
+                    'pricing_matrix' => [
+                        'first_cut_price'        => 575.00,
+                        'additional_cut_price'   => 275.00,
+                        'revision_price'         => 275.00,
+                        'base_encoding_bundle'   => 250.00,
+                        'base_encoding_limit'    => 2,
+                        'additional_encoding'    => 75.00,
                     ]
                 ]
             ],
@@ -76,7 +90,6 @@ class MenuCatalogSeeder extends Seeder
             'Radio' => [
                 [
                     'name' => 'Radio Details',
-                    'price' => 300.00,
                     'tags' => ['Audio'],
                     'billing_code' => 'Audio',
                     'blueprint' => [
@@ -84,6 +97,14 @@ class MenuCatalogSeeder extends Seeder
                         'cuts' => ['Sign Up Now', 'Pre Sale', 'On Sale Now', 'Week of', 'Day Prior', 'Day of', 'International Radio Package'],
                         'durations' => [15, 30, 60],
                         'languages' => ['English', 'Spanish', 'French']
+                    ],
+                    'pricing_matrix' => [
+                        'first_cut_price'        => 00.01,
+                        'additional_cut_price'   => 00.01,
+                        'revision_price'         => 00.01,
+                        'base_encoding_bundle'   => 00.01,
+                        'base_encoding_limit'    => 1,
+                        'additional_encoding'    => 00.01,
                     ]
                 ]
             ],
@@ -91,11 +112,18 @@ class MenuCatalogSeeder extends Seeder
             'Key Art & Static Assets' => [
                 [
                     'name' => 'Key Art & Static Assets Details',
-                    'price' => 800.00,
                     'tags' => ['Art'],
                     'billing_code' => 'Static',
                     'blueprint' => [
                         'types' => ['Key Art Package', 'Socials & Web Banners', 'International Key art & Social Package']
+                    ],
+                    'pricing_matrix' => [
+                        'first_cut_price'        => 00.01,
+                        'additional_cut_price'   => 00.01,
+                        'revision_price'         => 00.01,
+                        'base_encoding_bundle'   => 00.01,
+                        'base_encoding_limit'    => 1,
+                        'additional_encoding'    => 00.01,
                     ]
                 ]
             ]
@@ -117,7 +145,7 @@ class MenuCatalogSeeder extends Seeder
                     ],
                     [
                         'billing_code'           => $item['billing_code'],
-                        'default_price'          => $item['price'],
+                        'pricing_matrix'         => $item['pricing_matrix'] ?? null,
                         'form_blueprint'         => $item['blueprint']
                     ]
                 );

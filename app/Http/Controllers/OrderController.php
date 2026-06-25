@@ -113,7 +113,7 @@ class OrderController extends Controller
         // Defensively verify that the order has items to submit using the dictionary lookup ID
         $cartItems = $order->orderItems()
             ->where('order_item_status_id', $stillInCartStatus->id)
-            ->with('orderMenuItem')
+            ->with(['specifiable', 'orderMenuItem'])
             ->get();
         
         if ($cartItems->isEmpty()) {
@@ -135,6 +135,7 @@ class OrderController extends Controller
                 return null;
             }
 
+            // Recover existing Held invoice or initialize a fresh ledger container shell
             $invoice = $order->invoices()->where('status', 'Held')->first();
 
             if (!$invoice) {
@@ -163,7 +164,6 @@ class OrderController extends Controller
                 $nextValue = $sequence->last_value + 1;
                 $documentNumber = (string)$nextValue;
 
-                // Save the counter position back using the new column keys
                 DB::table('invoice_document_sequences')
                     ->where('id', $sequence->id)
                     ->update([
@@ -171,7 +171,7 @@ class OrderController extends Controller
                         'updated_at' => now(),
                     ]);
 
-                // Construct the master Held Invoice entity
+                // Construct the master Held Invoice entity (payment_due stays null while Held)
                 $invoice = Invoice::create([
                     'order_id'         => $order->id,
                     'organisation_id'  => $order->organisation_id ?? $order->client?->organisation_id ?? 1,
@@ -182,17 +182,67 @@ class OrderController extends Controller
                     'total'            => 0.00,
                     'payment_due'      => null,
                 ]);
-            };
+            }
 
             $newItemsTotal = 0.00;
+            $uniqueCutsTracked = [];
+            $globalEncodingPlatforms = collect();
 
-            // Build immutable ledger lines and update item reference pointers
+            // Pass 1: Gather all items with a 'Video' billing_code to pool encodings order-wide
+            $videoItemsInCart = $cartItems->filter(fn($item) => $item->orderMenuItem?->billing_code === 'Video');
+            
+            foreach ($videoItemsInCart as $item) {
+                $spec = $item->specifiable;
+                if ($spec && isset($spec->encoding) && is_array($spec->encoding)) {
+                    foreach ($spec->encoding as $platform) {
+                        $globalEncodingPlatforms->push($platform);
+                    }
+                }
+            }
+            
+            $totalUniqueEncodings = $globalEncodingPlatforms->unique()->count();
+
+            // Pass 2: Main Processing Loop (Creates primary ledger records and handles status switches)
             foreach ($cartItems as $item) {
-                $itemPrice = (float) ($item->locked_price ?? 0.00);
+                $menuItem = $item->orderMenuItem;
+                $matrix = $menuItem?->pricing_matrix ?? [];
+                $billingCode = $menuItem?->billing_code;
 
+                $itemPrice = (float) ($item->locked_price ?? 0.00);
+                $description = OrderItemBillingReference::fromOrderItem($item);
+                $spec = $item->specifiable;
+
+                // Execute specialized pricing matrix rules if item matches a Video pipeline track
+                if ($billingCode === 'Video' && $spec) {
+                    
+                    // A. Revision Scanner: Matches ISCI suffixes ending in an R# sequence pattern
+                    if (!empty($spec->isci) && preg_match('/R\d+$/i', $spec->isci)) {
+                        $itemPrice = (float) ($matrix['revision_price'] ?? 275.00);
+                        $description = 'Revision';
+                    } 
+                    // B. Cut Identifier Matrix: Evaluates structural configuration groups [Type-Duration-Language]
+                    else {
+                        $cutSignature = implode('-', [
+                            $spec->type ?? 'default',
+                            $spec->duration_seconds ?? $spec->duration ?? '0',
+                            $spec->language ?? 'English'
+                        ]);
+
+                        if (!in_array($cutSignature, $uniqueCutsTracked)) {
+                            $itemPrice = (float) ($matrix['first_cut_price'] ?? 575.00);
+                            $description = "First Cut: {$description}";
+                            $uniqueCutsTracked[] = $cutSignature;
+                        } else {
+                            $itemPrice = (float) ($matrix['additional_cut_price'] ?? 275.00);
+                            $description = "Additional Cut: {$description}";
+                        }
+                    }
+                }
+
+                // Write the core line ledger snapshot directly to the active invoice instance
                 $invoiceLine = $invoice->lines()->create([
                     'order_item_id' => $item->id,
-                    'description'   => OrderItemBillingReference::fromOrderItem($item),
+                    'description'   => $description,
                     'unit_price'    => $itemPrice,
                     'quantity'      => 1,
                     'total'         => $itemPrice,
@@ -200,44 +250,100 @@ class OrderController extends Controller
 
                 $newItemsTotal += $itemPrice;
 
-                // Inspect polymorphic specs for delivery targets
-                $spec = $item->specifiable;
-                if ($spec && isset($spec->encoding) && is_array($spec->encoding) && count($spec->encoding) > 0) {
-                    $encodingCount = count($spec->encoding);
-                    $pricePerTarget = 50.00; 
-                    $totalEncoding = $pricePerTarget * $encodingCount;
+                // C. Fallback Standard Processing Block for Non-Video Billing Tracks (Audio, Static, etc.)
+                if ($billingCode !== 'Video' && $spec) {
+                    if (isset($spec->encoding) && is_array($spec->encoding) && count($spec->encoding) > 0) {
+                        $encodingCount = count($spec->encoding);
+                        $pricePerTarget = 50.00; 
+                        $totalEncoding = $pricePerTarget * $encodingCount;
 
-                    $invoice->lines()->create([
-                        'order_item_id' => $item->id,
-                        'description'   => 'Encoding',
-                        'unit_price'    => $pricePerTarget,
-                        'quantity'      => $encodingCount,
-                        'total'         => $totalEncoding,
-                    ]);
+                        $invoice->lines()->create([
+                            'order_item_id' => $item->id,
+                            'description'   => 'Encoding',
+                            'unit_price'    => $pricePerTarget,
+                            'quantity'      => $encodingCount,
+                            'total'         => $totalEncoding,
+                        ]);
 
-                    $newItemsTotal += $totalEncoding;
+                        $newItemsTotal += $totalEncoding;
+                    }
                 }
 
-                // Track relation reference links and advance line item status pipelines out of cart
+                // Move line items out of checkout draft and attach tracking identifier links
                 $item->update([
                     'order_item_status_id' => $unassignedStatus->id,
                     'invoice_line_id'      => $invoiceLine->id
                 ]);
             }
 
-            // Mathematically update parent invoice totals seamlessly
+            // Pass 3: Process and append consolidated global order-wide encoding breakout entries for Video assets
+            if ($videoItemsInCart->isNotEmpty() && $totalUniqueEncodings > 0) {
+                $primaryVideoItem = $videoItemsInCart->first();
+                $videoMatrix = $primaryVideoItem->orderMenuItem?->pricing_matrix ?? [];
+                
+                $baseBundlePrice = (float) ($videoMatrix['base_encoding_bundle'] ?? 250.00);
+                $additionalPrice = (float) ($videoMatrix['additional_encoding'] ?? 75.00);
+
+                if ($totalUniqueEncodings === 1) {
+                    // Single distribution format chosen: Render isolated base bundle row entry
+                    $invoice->lines()->create([
+                        'order_item_id' => $primaryVideoItem->id,
+                        'description'   => 'Encoding',
+                        'unit_price'    => $baseBundlePrice,
+                        'quantity'      => 1,
+                        'total'         => $baseBundlePrice,
+                    ]);
+                    $newItemsTotal += $baseBundlePrice;
+                } else {
+                    // Multiple formats chosen: Split package into explicit breakout rows ($250 and $0)
+                    $invoice->lines()->create([
+                        'order_item_id' => $primaryVideoItem->id,
+                        'description'   => 'Encoding',
+                        'unit_price'    => $baseBundlePrice,
+                        'quantity'      => 1,
+                        'total'         => $baseBundlePrice,
+                    ]);
+                    
+                    $invoice->lines()->create([
+                        'order_item_id' => $primaryVideoItem->id,
+                        'description'   => 'Encoding',
+                        'unit_price'    => 0.00,
+                        'quantity'      => 1,
+                        'total'         => 0.00,
+                    ]);
+                    
+                    $newItemsTotal += $baseBundlePrice;
+
+                    // Loop and write individual $75 overhead rows for every target past the primary 2-pack limit
+                    if ($totalUniqueEncodings > 2) {
+                        $extraCount = $totalUniqueEncodings - 2;
+                        for ($i = 0; $i < $extraCount; $i++) {
+                            $invoice->lines()->create([
+                                'order_item_id' => $primaryVideoItem->id,
+                                'description'   => 'Encoding',
+                                'unit_price'    => $additionalPrice,
+                                'quantity'      => 1,
+                                'total'         => $additionalPrice,
+                            ]);
+                            $newItemsTotal += $additionalPrice;
+                        }
+                    }
+                }
+            }
+
+            // Mathematically record and update running parent invoice balances cleanly
             $invoice->update([
                 'subtotal' => $invoice->subtotal + $newItemsTotal,
                 'total'    => $invoice->total + $newItemsTotal,
             ]);
 
-            // Synchronize system workflow logic flags up to the parent order container
+            // Synchronize production metrics and monitoring tags up to the project wrapper
             $order->syncStatusAndTags();
 
             return $invoice;
         });
 
-        // Return payload enveloped matching unified response rules
+        // 3. Return payload enveloped matching unified response rules
         return response()->json([
             'message' => 'Order submitted successfully.',
             'data'    => [
@@ -262,13 +368,36 @@ class OrderController extends Controller
             'orderItems.assignees',
             'orderItems.statusLookup', 
             'orderItems.specifiable',
-            'invoices' => function($query) {
-                $query->with('lines');
-            }
+            'invoices.lines'
         ]);
 
+        $virtualBillingLines = [];
+
+        // 2. Resolve the "Still In Cart" dictionary status key safely
+        $stillInCartStatus = \App\Models\OrderItemStatus::where('name', 'Still In Cart')->first();
+
+        if ($stillInCartStatus) {
+            // Gather any items that are actively sitting in the checkout sandbox queue
+            $cartItems = $order->orderItems()
+                ->where('order_item_status_id', $stillInCartStatus->id)
+                ->get();
+
+            // If there are unsubmitted items, pass them to our service to generate the live preview rows
+            if ($cartItems->isNotEmpty()) {
+                $videoItems = $cartItems->filter(fn($item) => $item->orderMenuItem?->billing_code === 'Video');
+                
+                if ($videoItems->isNotEmpty()) {
+                    $calculator = new \App\Services\Pricing\VideoPricingCalculator();
+                    // Simulates the exact invoice rows ($250, $0, cuts, etc.) in memory 🧠
+                    $virtualBillingLines = $calculator->calculate($order, $videoItems);
+                }
+            }
+        }
+
+        // 3. Return a unified envelope payload back to Thunder Client / Frontend
         return response()->json([
-            'data' => $order
+                'order'                 => $order,
+                'virtual_billing_lines' => $virtualBillingLines,
         ], 200);
     }
 

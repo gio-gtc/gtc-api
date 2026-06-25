@@ -13,10 +13,8 @@ return new class extends Migration
             $table->foreignId('order_menu_category_id')->constrained('order_menu_categories')->cascadeOnDelete();
             $table->string('name');
             $table->string('billing_code', 20)->default('Video');
-            $table->decimal('default_price', 10, 2);
-            
-            $table->json('form_blueprint')->nullable(); 
-            
+            $table->json('form_blueprint')->nullable();
+            $table->json('pricing_matrix')->nullable();
             $table->timestamps();
         });
     }

@@ -20,60 +20,6 @@ use Illuminate\Support\Facades\Auth;
 class OrderItemController extends Controller
 {
     /**
-     * Shared Validation Logic Engine
-     */
-    private function validateVideoSpecifications(OrderMenuItem $menuItem, ?array $specs): array
-    {
-        $customErrors = [];
-        $blueprint = (array) $menuItem->form_blueprint;
-
-        if (blank($blueprint) || !isset($blueprint['types'])) {
-            $customErrors['specifications'] = ['The underlying menu item form blueprint config is invalid.'];
-            return $customErrors;
-        }
-
-        $type = Arr::get($specs, 'type');
-        if (!is_string($type) || !array_key_exists($type, $blueprint['types'])) {
-            $customErrors['specifications.type'] = ['The selected type is invalid.'];
-            return $customErrors;
-        }
-
-        $typeConfig = $blueprint['types'][$type];
-        $cut = Arr::get($specs, 'cut');
-        $durationSeconds = Arr::get($specs, 'duration_seconds');
-        $language = Arr::get($specs, 'language');
-
-        if ($cut === 'International TV Package' || $type === 'International') {
-            // 🔓 Cast to int since duration can now be passed as a string like "30"
-            if ((int)$durationSeconds !== 30) {
-                $customErrors['specifications.duration_seconds'] = ['International spots are locked to 30 seconds.'];
-            }
-            if (!is_string($language) || !Str::startsWith($language, 'English')) {
-                $customErrors['specifications.language'] = ['International spots are locked to English.'];
-            }
-        } else {
-            // 🔓 Since fields are now open custom strings, we simply validate that they aren't left blank
-            if (blank($cut)) {
-                $customErrors['specifications.cut'] = ['The cut variant is required.'];
-            }
-            if (blank($durationSeconds)) {
-                $customErrors['specifications.duration_seconds'] = ['The duration is required.'];
-            }
-            if (blank($language)) {
-                $customErrors['specifications.language'] = ['The language is required.'];
-            }
-        }
-
-        $encoding = Arr::get($specs, 'encoding'); // This will now come in as an array
-
-        if (!is_array($encoding) || empty($encoding)) {
-            $customErrors['specifications.encoding'] = ['At least one encoding profile must be selected.'];
-        }
-
-        return $customErrors;
-    }
-
-    /**
      * Normalize Key Art dimension wire values for nullable string columns.
      * Missing keys, null, and empty strings all persist as null.
      */
@@ -144,7 +90,7 @@ class OrderItemController extends Controller
     }
 
     /**
-     * Handles adding a polymorphic broadcast item row to a parent order.
+     * Handles adding a polymorphic Category item row to a parent order item.
      * Route: POST /api/orders/{order}/items
      */
     public function store(Order $order, Request $request): JsonResponse
@@ -191,12 +137,22 @@ class OrderItemController extends Controller
                 default => throw new \Exception("Unsupported category"),
             };
 
+            $matrix = $menuItem->pricing_matrix ?? [];
+
+            // Determine initial base contract entry rate from the matrix
+            if ($menuItem->billing_code === 'Video') {
+                $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 575.00);
+            } else {
+                // For Audio/Static categories, look up their custom base rates
+                $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 0.01);
+            }
+
             $specRecord = $modelClass::create($data);
 
             return OrderItem::create([
                 'order_id'             => $order->id,
                 'order_menu_item_id'   => $menuItem->id,
-                'locked_price'         => $menuItem->default_price ?? 0.00,
+                'locked_price'         => $initialLockedPrice ?? 0.02,
                 'order_item_status_id' => 1,
                 'due_date'             => $request->input('due_date'),
                 'specifiable_id'       => $specRecord->id,

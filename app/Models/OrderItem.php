@@ -128,14 +128,42 @@ class OrderItem extends Model
      */
     public function getEncodingSurchargeAttribute(): float
     {
-        $spec = $this->specifiable;
-        
-        if ($spec && isset($spec->encoding) && is_array($spec->encoding)) {
-            $pricePerTarget = 50.00; // $50.00 flat per distribution platform
-            return count($spec->encoding) * $pricePerTarget;
+        if ($this->orderMenuItem?->billing_code !== 'Video') {
+            return 0.00;
         }
 
-        return 0.00;
+        $stillInCartId = OrderItemStatus::where('name', 'Still In Cart')->first()?->id;
+        if (!$stillInCartId) return 0.00;
+
+        // Gather all video components currently waiting in the draft cart
+        $sisterVideoItems = self::where('order_id', $this->order_id)
+            ->where('order_item_status_id', $stillInCartId)
+            ->with('specifiable')
+            ->get();
+
+        $globalEncodingPlatforms = collect();
+        foreach ($sisterVideoItems as $item) {
+            if ($item->specifiable && isset($item->specifiable->encoding) && is_array($item->specifiable->encoding)) {
+                foreach ($item->specifiable->encoding as $platform) {
+                    $globalEncodingPlatforms->push($platform);
+                }
+            }
+        }
+
+        $totalUniqueEncodings = $globalEncodingPlatforms->unique()->count();
+        if ($totalUniqueEncodings === 0) return 0.00;
+
+        // Read variables straight from the database row 🧠
+        $matrix = $this->orderMenuItem?->pricing_matrix ?? [];
+        $baseBundlePrice = (float) ($matrix['base_encoding_bundle'] ?? 250.00);
+        $additionalPrice = (float) ($matrix['additional_encoding'] ?? 75.00);
+
+        $totalPoolCost = $totalUniqueEncodings <= 2 
+            ? $baseBundlePrice 
+            : $baseBundlePrice + (($totalUniqueEncodings - 2) * $additionalPrice);
+
+        // Distribute an even split across the active cart item rows for clear view matching
+        return round($totalPoolCost / $sisterVideoItems->count(), 2);
     }
 
     /**
@@ -143,6 +171,47 @@ class OrderItem extends Model
      */
     public function getEstimatedTotalAttribute(): float
     {
-        return (float)$this->locked_price + $this->encoding_surcharge;
+        if ($this->orderMenuItem?->billing_code !== 'Video') {
+            return (float) $this->locked_price;
+        }
+
+        $spec = $this->specifiable;
+        if (!$spec) return (float) $this->locked_price;
+
+        $matrix = $this->orderMenuItem?->pricing_matrix ?? [];
+
+        // 1. Evaluate Revision Matrix Parameter
+        if (!empty($spec->isci) && preg_match('/R\d+$/i', $spec->isci)) {
+            $basePrice = (float) ($matrix['revision_price'] ?? 275.00);
+            return $basePrice + $this->encoding_surcharge;
+        }
+
+        // 2. Evaluate Unique Cut Variant Parameter
+        $stillInCartId = \App\Models\OrderItemStatus::where('name', 'Still In Cart')->first()?->id;
+        
+        $priorItems = self::where('order_id', $this->order_id)
+            ->where('order_item_status_id', $stillInCartId)
+            ->where('id', '<', $this->id)
+            ->get();
+
+        $isFirstOfKind = true;
+        foreach ($priorItems as $prior) {
+            $pSpec = $prior->specifiable;
+            if ($pSpec && 
+                ($pSpec->type ?? 'default') === ($spec->type ?? 'default') &&
+                ($pSpec->duration_seconds ?? $pSpec->duration ?? '0') === ($spec->duration_seconds ?? $spec->duration ?? '0') &&
+                ($pSpec->language ?? 'English') === ($spec->language ?? 'English') &&
+                !( !empty($pSpec->isci) && preg_match('/R\d+$/i', $pSpec->isci) )
+            ) {
+                $isFirstOfKind = false;
+                break;
+            }
+        }
+
+        $basePrice = $isFirstOfKind 
+            ? (float) ($matrix['first_cut_price'] ?? 575.00) 
+            : (float) ($matrix['additional_cut_price'] ?? 275.00);
+
+        return $basePrice + $this->encoding_surcharge;
     }
 }
