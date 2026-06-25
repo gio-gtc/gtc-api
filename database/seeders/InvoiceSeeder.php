@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Order;
 use App\Models\Invoice;
-use App\Models\InvoiceLine;
 use App\Support\OrderItemBillingReference;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;

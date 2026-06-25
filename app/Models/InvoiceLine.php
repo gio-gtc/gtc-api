@@ -11,16 +11,19 @@ class InvoiceLine extends Model
     use HasFactory;
 
     protected $fillable = [
-        'invoice_id', 
-        'order_item_id', 
-        'description', 
-        'unit_price_cents', 
-        'quantity', 
-        'total_cents',
-        'price'
+        'invoice_id',
+        'order_item_id',
+        'description',
+        'unit_price',
+        'quantity',
+        'total',
     ];
 
-    protected $appends = ['price'];
+    protected $casts = [
+        'unit_price' => 'decimal:2',
+        'total'      => 'decimal:2',
+        'quantity'   => 'integer',
+    ];
 
     public function invoice(): BelongsTo
     {
@@ -30,15 +33,5 @@ class InvoiceLine extends Model
     public function orderItem(): BelongsTo
     {
         return $this->belongsTo(OrderItem::class);
-    }
-
-    /**
-     * Dynamically present 'price' in decimal format for backwards compatibility.
-     */
-    public function getPriceAttribute()
-    {
-        return array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])
-            ? $this->attributes['price']
-            : ($this->unit_price_cents / 100);
     }
 }

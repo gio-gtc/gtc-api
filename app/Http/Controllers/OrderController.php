@@ -125,103 +125,119 @@ class OrderController extends Controller
         // 2. Wrap operations inside a strict database transaction to ensure atomicity
         $invoice = DB::transaction(function () use ($order, $cartItems, $unassignedStatus) {
             
-            // Step A: Advance line item status pipelines out of the cart state using foreign key IDs
-            foreach ($cartItems as $item) {
-                $item->update([
-                    'order_item_status_id' => $unassignedStatus->id
-                ]);
-            }
-
             // DEMO GUARD: Showcase blueprints skip billing row compilation entirely
             if ($order->is_demo) {
+                foreach ($cartItems as $item) {
+                    $item->update([
+                        'order_item_status_id' => $unassignedStatus->id
+                    ]);
+                }
                 return null;
             }
 
-            // Step B: Resolve the client contact's organizational credit terms
-            $clientUser = $order->client; 
-            if (!$clientUser || !$clientUser->organisation_id) {
-                throw new \Exception('Precondition Failed: Order client organization details are unresolved.');
-            }
-            
-            $organisation = $clientUser->organisation;
-            
-            $days = 30;
-            if (!empty($organisation->credit_terms) && preg_match('/\d+/', $organisation->credit_terms, $matches)) {
-                $days = (int) $matches[0];
-            }
-            $paymentDue = Carbon::now()->addDays($days)->format('Y-m-d');
+            $invoice = $order->invoices()->where('status', 'Held')->first();
 
-            // Step C: Isolated Document Sequencing (Preventing duplicate number selection)
-            $sequenceKey = 'invoice';
+            if (!$invoice) {
+                $sequenceKey = 'invoice';
 
-            $sequence = DB::table('invoice_document_sequences')
-                ->where('sequence_key', $sequenceKey)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$sequence) {
-                DB::table('invoice_document_sequences')->insert([
-                    'sequence_key' => $sequenceKey,
-                    'last_value'   => 975949, // Stays aligned with our 975950 target sequence start
-                    'created_at'   => now(),
-                    'updated_at'   => now(),
-                ]);
-
+                // ATOMIC ROW LOCK: Queues up concurrent sequence generation streams
                 $sequence = DB::table('invoice_document_sequences')
                     ->where('sequence_key', $sequenceKey)
                     ->lockForUpdate()
                     ->first();
-            }
 
-            $nextValue = $sequence->last_value + 1;
-            $documentNumber = (string)$nextValue;
+                if (!$sequence) {
+                    DB::table('invoice_document_sequences')->insert([
+                        'sequence_key' => $sequenceKey,
+                        'last_value'   => 975949,
+                        'created_at'   => now(),
+                        'updated_at'   => now(),
+                    ]);
 
-            // Save the counter position back using the new column keys
-            DB::table('invoice_document_sequences')
-                ->where('id', $sequence->id)
-                ->update([
-                    'last_value' => $nextValue,
-                    'updated_at' => now(),
+                    $sequence = DB::table('invoice_document_sequences')
+                        ->where('sequence_key', $sequenceKey)
+                        ->lockForUpdate()
+                        ->first();
+                }
+
+                $nextValue = $sequence->last_value + 1;
+                $documentNumber = (string)$nextValue;
+
+                // Save the counter position back using the new column keys
+                DB::table('invoice_document_sequences')
+                    ->where('id', $sequence->id)
+                    ->update([
+                        'last_value' => $nextValue,
+                        'updated_at' => now(),
+                    ]);
+
+                // Construct the master Held Invoice entity
+                $invoice = Invoice::create([
+                    'order_id'         => $order->id,
+                    'organisation_id'  => $order->organisation_id ?? $order->client?->organisation_id ?? 1,
+                    'document_number'  => $documentNumber,
+                    'status'           => 'Held',
+                    'subtotal'         => 0.00,
+                    'tax'              => 0.00, 
+                    'total'            => 0.00,
+                    'payment_due'      => null,
                 ]);
+            };
 
-            // Calculate subtotal based strictly on the items currently being submitted from the cart
-            $subtotalCents = $cartItems->sum(fn($item) => (int) (($item->locked_price ?? 0) * 100));
+            $newItemsTotal = 0.00;
 
-            // Step D: Construct the master Held Invoice entity
-            $invoice = Invoice::create([
-                'order_id'         => $order->id,
-                // Safe fallback sequence checking organization from the current user or order client
-                'organisation_id'  => Auth::user()?->organisation_id ?? $clientUser->organisation_id,
-                'document_number'  => $documentNumber,
-                'status'           => 'Held',
-                'subtotal_cents'   => $subtotalCents,
-                'tax_cents'        => 0, 
-                'total_cents'      => $subtotalCents,
-                'payment_due'      => $paymentDue,
-            ]);
-
-            // Steps D & E Consolidated: Build immutable ledger lines and update item reference pointers
+            // Build immutable ledger lines and update item reference pointers
             foreach ($cartItems as $item) {
-                $itemPriceCents = (int) (($item->locked_price ?? 0) * 100);
+                $itemPrice = (float) ($item->locked_price ?? 0.00);
 
                 $invoiceLine = $invoice->lines()->create([
-                    'order_item_id'    => $item->id,
-                    'description'      => OrderItemBillingReference::fromOrderItem($item),
-                    'unit_price_cents' => $itemPriceCents,
-                    'quantity'         => 1,
-                    'total_cents'      => $itemPriceCents,
+                    'order_item_id' => $item->id,
+                    'description'   => OrderItemBillingReference::fromOrderItem($item),
+                    'unit_price'    => $itemPrice,
+                    'quantity'      => 1,
+                    'total'         => $itemPrice,
                 ]);
 
-                // Track relation reference links directly within item lineage audit structures
+                $newItemsTotal += $itemPrice;
+
+                // Inspect polymorphic specs for delivery targets
+                $spec = $item->specifiable;
+                if ($spec && isset($spec->encoding) && is_array($spec->encoding) && count($spec->encoding) > 0) {
+                    $encodingCount = count($spec->encoding);
+                    $pricePerTarget = 50.00; 
+                    $totalEncoding = $pricePerTarget * $encodingCount;
+
+                    $invoice->lines()->create([
+                        'order_item_id' => $item->id,
+                        'description'   => 'Encoding',
+                        'unit_price'    => $pricePerTarget,
+                        'quantity'      => $encodingCount,
+                        'total'         => $totalEncoding,
+                    ]);
+
+                    $newItemsTotal += $totalEncoding;
+                }
+
+                // Track relation reference links and advance line item status pipelines out of cart
                 $item->update([
-                    'invoice_line_id' => $invoiceLine->id
+                    'order_item_status_id' => $unassignedStatus->id,
+                    'invoice_line_id'      => $invoiceLine->id
                 ]);
             }
+
+            // Mathematically update parent invoice totals seamlessly
+            $invoice->update([
+                'subtotal' => $invoice->subtotal + $newItemsTotal,
+                'total'    => $invoice->total + $newItemsTotal,
+            ]);
+
+            // Synchronize system workflow logic flags up to the parent order container
+            $order->syncStatusAndTags();
 
             return $invoice;
         });
 
-        // 3. Return payload enveloped matching unified response rules
+        // Return payload enveloped matching unified response rules
         return response()->json([
             'message' => 'Order submitted successfully.',
             'data'    => [
@@ -247,8 +263,7 @@ class OrderController extends Controller
             'orderItems.statusLookup', 
             'orderItems.specifiable',
             'invoices' => function($query) {
-                $query->select(['id', 'order_id', 'document_number', 'status', 'subtotal_cents', 'tax_cents', 'total_cents', 'payment_due'])
-                    ->with('lines');
+                $query->with('lines');
             }
         ]);
 

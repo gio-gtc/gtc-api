@@ -12,14 +12,21 @@ class Invoice extends Model
     use HasFactory;
 
     protected $fillable = [
-        'order_id', 
-        'organisation_id', 
-        'document_number', 
-        'status', 
-        'subtotal_cents', 
-        'tax_cents', 
-        'total_cents', 
-        'payment_due'
+        'order_id',
+        'organisation_id',
+        'document_number',
+        'status',
+        'subtotal',
+        'tax',
+        'total',
+        'payment_due',
+    ];
+
+    protected $casts = [
+        'subtotal'    => 'decimal:2',
+        'tax'         => 'decimal:2',
+        'total'       => 'decimal:2',
+        'payment_due' => 'datetime',
     ];
 
     public function setStatusAttribute($value)

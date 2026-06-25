@@ -10,68 +10,45 @@ use App\Models\OrderItemKeyArtSpecs;
  * Media: "{type} {cut} {duration}" (duration as M:SS, e.g. :30, 1:00).
  * Key Art: "{type} {w}×{h}".
  */
-final class OrderItemBillingReference
+class OrderItemBillingReference
 {
+    /**
+     * Compile a clean format-aware descriptive string from an OrderItem configuration.
+     */
     public static function fromOrderItem(OrderItem $item): string
     {
         $spec = $item->specifiable;
-
-        if ($spec instanceof OrderItemKeyArtSpecs) {
-            $parts = [];
-            if (! empty($spec->type)) {
-                $parts[] = $spec->type;
-            }
-            if (! empty($spec->w) && ! empty($spec->h)) {
-                $parts[] = $spec->w.'×'.$spec->h;
-            }
-
-            if ($parts !== []) {
-                return implode(' ', $parts);
-            }
-
-            return 'Item '.$item->id;
-        }
-
-        $parts = [];
+        $descriptionParts = [];
+        
         if ($spec) {
-            if (! empty($spec->type)) {
-                $parts[] = $spec->type;
+            if (!empty($spec->type)) {
+                $descriptionParts[] = $spec->type;
             }
-            if (! empty($spec->cut)) {
-                $parts[] = $spec->cut;
+            if (!empty($spec->cut)) {
+                $descriptionParts[] = $spec->cut;
             }
-
+            
+            // Time Calculator Engine: Formats values >= 60 into clock formats (e.g. 90 -> 1:30)
             $duration = $spec->duration_seconds ?? $spec->duration ?? null;
-            if ($duration !== null && $duration !== '') {
-                $formatted = self::formatDurationForBilling($duration);
-                if ($formatted !== '') {
-                    $parts[] = $formatted;
+            if (!empty($duration)) {
+                if (is_numeric($duration)) {
+                    $totalSeconds = (int) $duration;
+                    if ($totalSeconds >= 60) {
+                        $minutes = floor($totalSeconds / 60);
+                        $remainingSeconds = $totalSeconds % 60;
+                        $descriptionParts[] = $minutes . ':' . str_pad($remainingSeconds, 2, '0', STR_PAD_LEFT);
+                    } else {
+                        $descriptionParts[] = ":{$totalSeconds}";
+                    }
+                } else {
+                    $descriptionParts[] = $duration;
                 }
             }
         }
 
-        if ($parts !== []) {
-            return implode(' ', $parts);
-        }
-
-        return $item->orderMenuItem?->name ?? 'Creative Deliverable Asset Production Stop';
-    }
-
-    private static function formatDurationForBilling(mixed $duration): string
-    {
-        if (! is_numeric($duration)) {
-            return trim((string) $duration);
-        }
-
-        $totalSeconds = (int) $duration;
-
-        if ($totalSeconds >= 60) {
-            $minutes = intdiv($totalSeconds, 60);
-            $remainingSeconds = $totalSeconds % 60;
-
-            return $minutes.':'.str_pad((string) $remainingSeconds, 2, '0', STR_PAD_LEFT);
-        }
-
-        return ':'.$totalSeconds;
+        // Return compiled string or drop back to the catalog name fallback
+        return !empty($descriptionParts) 
+            ? implode(' ', $descriptionParts) 
+            : ($item->orderMenuItem?->name ?? 'Creative Production Asset Deliverable');
     }
 }
