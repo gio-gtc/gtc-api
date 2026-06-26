@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Invoice;
 use App\Models\OrderItem;
 use App\Models\Tour;
+use App\Services\Pricing\VideoPricingCalculator;
 use App\Support\OrderItemBillingReference;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -106,14 +107,11 @@ class OrderController extends Controller
 
     public function submit(Order $order): JsonResponse
     {
-        // 1. Resolve target relational system lookup dictionaries immediately
         $stillInCartStatus = OrderItemStatus::where('name', 'Still In Cart')->first();
         $unassignedStatus  = OrderItemStatus::where('name', 'Unassigned')->first();
 
-        // Defensively verify that the order has items to submit using the dictionary lookup ID
         $cartItems = $order->orderItems()
             ->where('order_item_status_id', $stillInCartStatus->id)
-            ->with(['specifiable', 'orderMenuItem'])
             ->get();
         
         if ($cartItems->isEmpty()) {
@@ -122,234 +120,29 @@ class OrderController extends Controller
             ], 409);
         }
 
-        // 2. Wrap operations inside a strict database transaction to ensure atomicity
-        $invoice = DB::transaction(function () use ($order, $cartItems, $unassignedStatus) {
-            
-            // DEMO GUARD: Showcase blueprints skip billing row compilation entirely
-            if ($order->is_demo) {
-                foreach ($cartItems as $item) {
-                    $item->update([
-                        'order_item_status_id' => $unassignedStatus->id
-                    ]);
-                }
-                return null;
-            }
-
-            // Recover existing Held invoice or initialize a fresh ledger container shell
-            $invoice = $order->invoices()->where('status', 'Held')->first();
-
-            if (!$invoice) {
-                $sequenceKey = 'invoice';
-
-                // ATOMIC ROW LOCK: Queues up concurrent sequence generation streams
-                $sequence = DB::table('invoice_document_sequences')
-                    ->where('sequence_key', $sequenceKey)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$sequence) {
-                    DB::table('invoice_document_sequences')->insert([
-                        'sequence_key' => $sequenceKey,
-                        'last_value'   => 975949,
-                        'created_at'   => now(),
-                        'updated_at'   => now(),
-                    ]);
-
-                    $sequence = DB::table('invoice_document_sequences')
-                        ->where('sequence_key', $sequenceKey)
-                        ->lockForUpdate()
-                        ->first();
-                }
-
-                $nextValue = $sequence->last_value + 1;
-                $documentNumber = (string)$nextValue;
-
-                DB::table('invoice_document_sequences')
-                    ->where('id', $sequence->id)
-                    ->update([
-                        'last_value' => $nextValue,
-                        'updated_at' => now(),
-                    ]);
-
-                // Construct the master Held Invoice entity (payment_due stays null while Held)
-                $invoice = Invoice::create([
-                    'order_id'         => $order->id,
-                    'organisation_id'  => $order->organisation_id ?? $order->client?->organisation_id ?? 1,
-                    'document_number'  => $documentNumber,
-                    'status'           => 'Held',
-                    'subtotal'         => 0.00,
-                    'tax'              => 0.00, 
-                    'total'            => 0.00,
-                    'payment_due'      => null,
-                ]);
-            }
-
-            $newItemsTotal = 0.00;
-            $uniqueCutsTracked = [];
-            $globalEncodingPlatforms = collect();
-
-            // Pass 1: Gather all items with a 'Video' billing_code to pool encodings order-wide
-            $videoItemsInCart = $cartItems->filter(fn($item) => $item->orderMenuItem?->billing_code === 'Video');
-            
-            foreach ($videoItemsInCart as $item) {
-                $spec = $item->specifiable;
-                if ($spec && isset($spec->encoding) && is_array($spec->encoding)) {
-                    foreach ($spec->encoding as $platform) {
-                        $globalEncodingPlatforms->push($platform);
-                    }
-                }
-            }
-            
-            $totalUniqueEncodings = $globalEncodingPlatforms->unique()->count();
-
-            // Pass 2: Main Processing Loop (Creates primary ledger records and handles status switches)
+        DB::transaction(function () use ($order, $cartItems, $unassignedStatus) {
             foreach ($cartItems as $item) {
-                $menuItem = $item->orderMenuItem;
-                $matrix = $menuItem?->pricing_matrix ?? [];
-                $billingCode = $menuItem?->billing_code;
-
-                $itemPrice = (float) ($item->locked_price ?? 0.00);
-                $description = OrderItemBillingReference::fromOrderItem($item);
-                $spec = $item->specifiable;
-
-                // Execute specialized pricing matrix rules if item matches a Video pipeline track
-                if ($billingCode === 'Video' && $spec) {
-                    
-                    // A. Revision Scanner: Matches ISCI suffixes ending in an R# sequence pattern
-                    if (!empty($spec->isci) && preg_match('/R\d+$/i', $spec->isci)) {
-                        $itemPrice = (float) ($matrix['revision_price'] ?? 275.00);
-                        $description = 'Revision';
-                    } 
-                    // B. Cut Identifier Matrix: Evaluates structural configuration groups [Type-Duration-Language]
-                    else {
-                        $cutSignature = implode('-', [
-                            $spec->type ?? 'default',
-                            $spec->duration_seconds ?? $spec->duration ?? '0',
-                            $spec->language ?? 'English'
-                        ]);
-
-                        if (!in_array($cutSignature, $uniqueCutsTracked)) {
-                            $itemPrice = (float) ($matrix['first_cut_price'] ?? 575.00);
-                            $description = "First Cut: {$description}";
-                            $uniqueCutsTracked[] = $cutSignature;
-                        } else {
-                            $itemPrice = (float) ($matrix['additional_cut_price'] ?? 275.00);
-                            $description = "Additional Cut: {$description}";
-                        }
-                    }
-                }
-
-                // Write the core line ledger snapshot directly to the active invoice instance
-                $invoiceLine = $invoice->lines()->create([
-                    'order_item_id' => $item->id,
-                    'description'   => $description,
-                    'unit_price'    => $itemPrice,
-                    'quantity'      => 1,
-                    'total'         => $itemPrice,
-                ]);
-
-                $newItemsTotal += $itemPrice;
-
-                // C. Fallback Standard Processing Block for Non-Video Billing Tracks (Audio, Static, etc.)
-                if ($billingCode !== 'Video' && $spec) {
-                    if (isset($spec->encoding) && is_array($spec->encoding) && count($spec->encoding) > 0) {
-                        $encodingCount = count($spec->encoding);
-                        $pricePerTarget = 50.00; 
-                        $totalEncoding = $pricePerTarget * $encodingCount;
-
-                        $invoice->lines()->create([
-                            'order_item_id' => $item->id,
-                            'description'   => 'Encoding',
-                            'unit_price'    => $pricePerTarget,
-                            'quantity'      => $encodingCount,
-                            'total'         => $totalEncoding,
-                        ]);
-
-                        $newItemsTotal += $totalEncoding;
-                    }
-                }
-
-                // Move line items out of checkout draft and attach tracking identifier links
                 $item->update([
-                    'order_item_status_id' => $unassignedStatus->id,
-                    'invoice_line_id'      => $invoiceLine->id
+                    'order_item_status_id' => $unassignedStatus->id
                 ]);
             }
-
-            // Pass 3: Process and append consolidated global order-wide encoding breakout entries for Video assets
-            if ($videoItemsInCart->isNotEmpty() && $totalUniqueEncodings > 0) {
-                $primaryVideoItem = $videoItemsInCart->first();
-                $videoMatrix = $primaryVideoItem->orderMenuItem?->pricing_matrix ?? [];
-                
-                $baseBundlePrice = (float) ($videoMatrix['base_encoding_bundle'] ?? 250.00);
-                $additionalPrice = (float) ($videoMatrix['additional_encoding'] ?? 75.00);
-
-                if ($totalUniqueEncodings === 1) {
-                    // Single distribution format chosen: Render isolated base bundle row entry
-                    $invoice->lines()->create([
-                        'order_item_id' => $primaryVideoItem->id,
-                        'description'   => 'Encoding',
-                        'unit_price'    => $baseBundlePrice,
-                        'quantity'      => 1,
-                        'total'         => $baseBundlePrice,
-                    ]);
-                    $newItemsTotal += $baseBundlePrice;
-                } else {
-                    // Multiple formats chosen: Split package into explicit breakout rows ($250 and $0)
-                    $invoice->lines()->create([
-                        'order_item_id' => $primaryVideoItem->id,
-                        'description'   => 'Encoding',
-                        'unit_price'    => $baseBundlePrice,
-                        'quantity'      => 1,
-                        'total'         => $baseBundlePrice,
-                    ]);
-                    
-                    $invoice->lines()->create([
-                        'order_item_id' => $primaryVideoItem->id,
-                        'description'   => 'Encoding',
-                        'unit_price'    => 0.00,
-                        'quantity'      => 1,
-                        'total'         => 0.00,
-                    ]);
-                    
-                    $newItemsTotal += $baseBundlePrice;
-
-                    // Loop and write individual $75 overhead rows for every target past the primary 2-pack limit
-                    if ($totalUniqueEncodings > 2) {
-                        $extraCount = $totalUniqueEncodings - 2;
-                        for ($i = 0; $i < $extraCount; $i++) {
-                            $invoice->lines()->create([
-                                'order_item_id' => $primaryVideoItem->id,
-                                'description'   => 'Encoding',
-                                'unit_price'    => $additionalPrice,
-                                'quantity'      => 1,
-                                'total'         => $additionalPrice,
-                            ]);
-                            $newItemsTotal += $additionalPrice;
-                        }
-                    }
-                }
-            }
-
-            // Mathematically record and update running parent invoice balances cleanly
-            $invoice->update([
-                'subtotal' => $invoice->subtotal + $newItemsTotal,
-                'total'    => $invoice->total + $newItemsTotal,
-            ]);
-
-            // Synchronize production metrics and monitoring tags up to the project wrapper
-            $order->syncStatusAndTags();
-
-            return $invoice;
         });
 
-        // 3. Return payload enveloped matching unified response rules
+        // Trigger one final billing pass to freeze names (e.g. converting 'First Cut' statuses to history anchors)
+        if (!$order->is_demo) {
+            $calculator = new VideoPricingCalculator();
+            $calculator->recalculateInvoice($order);
+        }
+
+        // Synchronize general status tags across your tracking indexes
+        $order->syncStatusAndTags();
+
+        $invoice = $order->invoices()->where('status', 'Held')->with('lines.orderItem.statusLookup')->first();
+
         return response()->json([
             'message' => 'Order submitted successfully.',
-            'data'    => [
-                'order'   => $order->load('orderItems'),
-                'invoice' => $invoice ? $invoice->load('lines') : null
-            ]
+            'order'   => $order->load('orderItems.statusLookup'),
+            'invoice' => $invoice
         ], 200);
     }
 
@@ -358,7 +151,6 @@ class OrderController extends Controller
      */
     public function show(Order $order): JsonResponse
     {
-        // Eager load everything needed to render a rich order details page
         $order->load([
             'venue',
             'tour',
@@ -368,36 +160,56 @@ class OrderController extends Controller
             'orderItems.assignees',
             'orderItems.statusLookup', 
             'orderItems.specifiable',
-            'invoices.lines'
+            'invoices.lines.orderItem.statusLookup'
         ]);
 
-        $virtualBillingLines = [];
+        return response()->json([
+            'order' => $order,
+        ], 200);
+    }
 
-        // 2. Resolve the "Still In Cart" dictionary status key safely
-        $stillInCartStatus = \App\Models\OrderItemStatus::where('name', 'Still In Cart')->first();
+        /**
+     * Updates slideout header parameters for an existing order.
+     * Route: PATCH /api/orders/{order}
+     */
+    public function update(Order $order, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'show_dates'           => 'nullable|array',
+            'show_dates.*.id'      => 'nullable|integer|exists:order_show_dates,id',
+            'show_dates.*.show_date' => 'required_with:show_dates|date_format:Y-m-d',
+            'ticket_outlets'       => 'nullable|string',
+            'on_same_date'         => 'nullable|string',
+            'cardholder_times'     => 'nullable|string',
+            'logos'                => 'nullable|string',
+            'special_instructions' => 'nullable|string',
+        ]);
 
-        if ($stillInCartStatus) {
-            // Gather any items that are actively sitting in the checkout sandbox queue
-            $cartItems = $order->orderItems()
-                ->where('order_item_status_id', $stillInCartStatus->id)
-                ->get();
+        // Update the root order attributes, filtering out the relational array
+        $order->update(Arr::except($validated, ['show_dates']));
 
-            // If there are unsubmitted items, pass them to our service to generate the live preview rows
-            if ($cartItems->isNotEmpty()) {
-                $videoItems = $cartItems->filter(fn($item) => $item->orderMenuItem?->billing_code === 'Video');
-                
-                if ($videoItems->isNotEmpty()) {
-                    $calculator = new \App\Services\Pricing\VideoPricingCalculator();
-                    // Simulates the exact invoice rows ($250, $0, cuts, etc.) in memory 🧠
-                    $virtualBillingLines = $calculator->calculate($order, $videoItems);
-                }
+        // Synchronize the OrderShowDate records
+        if ($request->has('show_dates')) {
+            $incomingDates = collect($request->input('show_dates'));
+
+            // Find all IDs passed from the request to determine what stays
+            $keepIds = $incomingDates->pluck('id')->filter()->toArray();
+
+            // SQL Step 1: DELETE any existing show dates that were omitted from the payload
+            $order->showDates()->whereNotIn('id', $keepIds)->delete();
+
+            // SQL Step 2: UPSERT (Update matching rows / Insert fresh ones)
+            foreach ($incomingDates as $dateItem) {
+                $order->showDates()->updateOrCreate(
+                    ['id' => $dateItem['id'] ?? null],
+                    ['show_date' => $dateItem['show_date']]
+                );
             }
         }
 
-        // 3. Return a unified envelope payload back to Thunder Client / Frontend
         return response()->json([
-                'order'                 => $order,
-                'virtual_billing_lines' => $virtualBillingLines,
+            'message' => 'Order workspace and show dates successfully synchronized.',
+            'data'    => $order->fresh(['showDates'])
         ], 200);
     }
 
@@ -557,56 +369,10 @@ class OrderController extends Controller
     }
 
     /**
-     * Updates slideout header parameters for an existing order.
-     * Route: PATCH /api/orders/{order}
-     */
-    public function update(Order $order, Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'show_dates'           => 'nullable|array',
-            'show_dates.*.id'      => 'nullable|integer|exists:order_show_dates,id',
-            'show_dates.*.show_date' => 'required_with:show_dates|date_format:Y-m-d',
-            'ticket_outlets'       => 'nullable|string',
-            'on_same_date'         => 'nullable|string',
-            'cardholder_times'     => 'nullable|string',
-            'logos'                => 'nullable|string',
-            'special_instructions' => 'nullable|string',
-        ]);
-
-        // Update the root order attributes, filtering out the relational array
-        $order->update(Arr::except($validated, ['show_dates']));
-
-        // Synchronize the OrderShowDate records
-        if ($request->has('show_dates')) {
-            $incomingDates = collect($request->input('show_dates'));
-
-            // Find all IDs passed from the request to determine what stays
-            $keepIds = $incomingDates->pluck('id')->filter()->toArray();
-
-            // SQL Step 1: DELETE any existing show dates that were omitted from the payload
-            $order->showDates()->whereNotIn('id', $keepIds)->delete();
-
-            // SQL Step 2: UPSERT (Update matching rows / Insert fresh ones)
-            foreach ($incomingDates as $dateItem) {
-                $order->showDates()->updateOrCreate(
-                    ['id' => $dateItem['id'] ?? null],
-                    ['show_date' => $dateItem['show_date']]
-                );
-            }
-        }
-
-        return response()->json([
-            'message' => 'Order workspace and show dates successfully synchronized.',
-            'data'    => $order->fresh(['showDates'])
-        ], 200);
-    }
-
-    /**
      * Clear all unsubmitted "Still In Cart" items from the specified order.
      */
     public function clearCart(Order $order): JsonResponse
     {
-        // 1. Resolve the status lookup dictionary ID
         $stillInCartStatus = OrderItemStatus::where('name', 'Still In Cart')->first();
 
         if (!$stillInCartStatus) {
@@ -615,7 +381,6 @@ class OrderController extends Controller
             ], 500);
         }
 
-        // 2. Perform a bulk batch delete on matching items
         $deletedCount = $order->orderItems()
             ->where('order_item_status_id', $stillInCartStatus->id)
             ->delete();
@@ -626,11 +391,17 @@ class OrderController extends Controller
             ], 409);
         }
 
-        // 3. Clean up: If this order has zero items left completely, drop the empty order container
+        // Trigger a database ledger sync pass to wipe the dropped item calculations from MySQL rows
+        if (!$order->is_demo) {
+            $calculator = new VideoPricingCalculator();
+            $calculator->recalculateInvoice($order);
+        }
+
+        // Clean up empty master containers if asset references have hit zero
         if ($order->orderItems()->count() === 0) {
             $order->delete();
             return response()->json([
-                'message' => "Successfully removed {$deletedCount} items and cleared empty order shell.",
+                'message' => "Successfully removed {$deletedCount} items.",
                 'order_deleted' => true,
                 'count' => $deletedCount
             ], 200);
@@ -639,7 +410,8 @@ class OrderController extends Controller
         return response()->json([
             'message' => "Successfully cleared {$deletedCount} unsubmitted items from the cart.",
             'order_deleted' => false,
-            'count' => $deletedCount
+            'count' => $deletedCount,
+            'order' => $order->load('orderItems.statusLookup', 'invoices.lines.orderItem.statusLookup')
         ], 200);
     }
 }

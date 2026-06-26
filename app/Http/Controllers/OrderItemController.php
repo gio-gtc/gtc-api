@@ -9,11 +9,11 @@ use App\Models\OrderItemBroadcastSpecs;
 use App\Models\OrderItemKeyArtSpecs;
 use App\Models\OrderItemRadioSpecs;
 use App\Models\OrderItemSocialSpecs;
+use App\Services\Pricing\VideoPricingCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 
@@ -105,7 +105,7 @@ class OrderItemController extends Controller
         $menuItem = OrderMenuItem::findOrFail($request->input('order_menu_item_id'));
         $specs = $request->input('specifications');
 
-        $item = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
+        $orderItem = DB::transaction(function () use ($order, $menuItem, $request, $specs) {
             
             // 2. Polymorphic Routing based on Menu Item Category
             // Category 1 = Broadcast, 2 = Social
@@ -137,22 +137,12 @@ class OrderItemController extends Controller
                 default => throw new \Exception("Unsupported category"),
             };
 
-            $matrix = $menuItem->pricing_matrix ?? [];
-
-            // Determine initial base contract entry rate from the matrix
-            if ($menuItem->billing_code === 'Video') {
-                $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 575.00);
-            } else {
-                // For Audio/Static categories, look up their custom base rates
-                $initialLockedPrice = (float) ($matrix['first_cut_price'] ?? 0.01);
-            }
-
             $specRecord = $modelClass::create($data);
 
             return OrderItem::create([
                 'order_id'             => $order->id,
                 'order_menu_item_id'   => $menuItem->id,
-                'locked_price'         => $initialLockedPrice ?? 0.02,
+                'locked_price'         => 0.00,
                 'order_item_status_id' => 1,
                 'due_date'             => $request->input('due_date'),
                 'specifiable_id'       => $specRecord->id,
@@ -160,9 +150,13 @@ class OrderItemController extends Controller
             ]);
         });
 
+        // Trigger the live database sync to structure the lines onto the active invoice ⚡
+        $calculator = new VideoPricingCalculator();
+        $calculator->recalculateInvoice($order);
+
         return response()->json([
-            'message' => 'Item successfully added.',
-            'data'    => $item->fresh(['specifiable'])
+            'message' => 'Item successfully added to dashboard ledger.',
+            'data'    => $orderItem->fresh(['specifiable', 'order.invoices.lines'])
         ], 201);
     }
 
@@ -172,10 +166,17 @@ class OrderItemController extends Controller
      */
     public function destroy(OrderItem $orderItem): JsonResponse
     {
+        $order = $orderItem->order;
+
         $orderItem->specifiable?->delete();
         $orderItem->delete();
 
-        return response()->json(['message' => 'Item removed from order completely.'], 200);
+        if ($order) {
+            $calculator = new VideoPricingCalculator();
+            $calculator->recalculateInvoice($order);
+        }
+
+        return response()->json(['message' => 'Item removed and ledger synchronized successfully.'], 200);
     }
 
     /**
@@ -209,7 +210,7 @@ class OrderItemController extends Controller
 
         $validated = $request->validate($validationRules);
 
-        return DB::transaction(function () use ($orderItem, $request) {
+        $response = DB::transaction(function () use ($orderItem, $request) {
             
             // Core Item field dirty-checks
             if ($request->has('due_date')) {
@@ -248,6 +249,13 @@ class OrderItemController extends Controller
                 'data'    => $orderItem->fresh(['specifiable', 'statusLookup', 'assignees'])
             ], 200);
         });
+
+        if ($orderItem->order) {
+            $calculator = new VideoPricingCalculator();
+            $calculator->recalculateInvoice($orderItem->order);
+        }
+
+        return $response;
     }
 
     /**
@@ -272,7 +280,7 @@ class OrderItemController extends Controller
 
         $itemIds = $request->input('order_item_ids');
 
-        return DB::transaction(function () use ($request, $itemIds) {
+        $affectedParentOrderIds = DB::transaction(function () use ($request, $itemIds) {
             $itemsMeta = OrderItem::whereIn('id', $itemIds)
                 ->select(['id', 'order_id', 'specifiable_id', 'specifiable_type'])
                 ->get();
@@ -335,6 +343,24 @@ class OrderItemController extends Controller
                 ]
             ], 200);
         });
+
+        if (!empty($affectedParentOrderIds)) {
+            $calculator = new VideoPricingCalculator();
+            foreach ($affectedParentOrderIds as $orderId) {
+                $order = Order::find($orderId);
+                if ($order) {
+                    $calculator->recalculateInvoice($order);
+                }
+            }
+        }
+
+        return response()->json([
+            'message' => 'Selected order line items batch-updated successfully.',
+            'meta' => [
+                'updated_items_count' => count($itemIds),
+                'affected_orders'     => $affectedParentOrderIds
+            ]
+        ], 200);
     }
 
     /**
@@ -385,7 +411,7 @@ class OrderItemController extends Controller
             $newRevisionItem = OrderItem::create([
                 'order_id'             => $orderItem->order_id,
                 'order_menu_item_id'   => $orderItem->order_menu_item_id,
-                'locked_price'         => $orderItem->locked_price,
+                'locked_price'         => 0.00,
                 'order_item_status_id' => 5,
                 'due_date'             => $orderItem->due_date,
                 'specifiable_id'       => $newSpecification->id,
@@ -415,6 +441,11 @@ class OrderItemController extends Controller
 
             return $newRevisionItem;
         });
+
+        if ($processedItem->order) {
+            $calculator = new VideoPricingCalculator();
+            $calculator->recalculateInvoice($processedItem->order);
+        }
 
         return response()->json([
             'message' => "Line item successfully split to Revision {$processedItem->revision_number}.",
