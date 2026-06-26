@@ -234,74 +234,7 @@ class OrderController extends Controller
                 'statuses:id,name'
             ]);
 
-        $orders = $ordersQuery->latest()->get();
-        $orderIds = $orders->pluck('id');
-
-        if ($orderIds->isNotEmpty()) {
-            
-            // 2. Optimized Flat Lookup: Collaborators Map
-            $collaboratorsMap = DB::table('users')
-                ->join('order_item_assignee', 'users.id', '=', 'order_item_assignee.user_id')
-                ->join('order_items', 'order_item_assignee.order_item_id', '=', 'order_items.id')
-                ->whereIn('order_items.order_id', $orderIds)
-                ->select([
-                    'users.id',
-                    'users.first_name',
-                    'users.last_name',
-                    'users.avatar',
-                    'order_items.order_id'
-                ])
-                ->distinct()
-                ->get()
-                ->groupBy('order_id');
-
-            // 3. Optimized Flat Lookup: Menu Category Tags Map
-            // (Assumes your menu items table is named 'order_menu_items'. Adjust if different!)
-            $categoryMap = DB::table('order_items')
-                ->join('order_menu_items', 'order_items.order_menu_item_id', '=', 'order_menu_items.id')
-                ->whereIn('order_items.order_id', $orderIds)
-                ->select([
-                    'order_items.order_id',
-                    'order_menu_items.order_menu_category_id'
-                ])
-                ->distinct()
-                ->get()
-                ->groupBy('order_id');
-
-            // 4. Single-pass loop to hydrate our flat layout arrays straight to the root payload
-            foreach ($orders as $order) {
-                
-                // Map Collaborators
-                $order->collaborators = $collaboratorsMap->get($order->id, collect())->map(function ($user) {
-                    return [
-                        'id'         => $user->id,
-                        'first_name' => $user->first_name,
-                        'last_name'  => $user->last_name,
-                        'avatar'     => $user->avatar,
-                    ];
-                })->values();
-
-                // Compute Flat Tags Array on the fly using category logic
-                $orderCategoryIds = $categoryMap->get($order->id, collect())->pluck('order_menu_category_id')->toArray();
-                
-                $tags = [];
-                // Categories 1, 2, 3 translate to 'Audio' tags
-                if (count(array_intersect($orderCategoryIds, [1, 2, 3])) > 0) {
-                    $tags[] = 'Audio';
-                }
-                // Category 4 translates to 'Art' tags
-                if (in_array(4, $orderCategoryIds)) {
-                    $tags[] = 'Art';
-                }
-
-                $order->tags = $tags;
-
-                $order->unsetRelation('orderItems');
-                $order->makeHidden(['orderItems', 'order_items']);
-            }
-        }
-
-        // Apply the "My Tasks" row pruning strategy
+        // Moved all filtering logic ABOVE the query execution block
         if ($request->query('filter') === 'my-tasks') {
             $ordersQuery->whereHas('orderItems.assignees', function ($q) use ($user) {
                 $q->where('users.id', $user->id);
@@ -333,7 +266,6 @@ class OrderController extends Controller
                 ->where(function ($subQuery) use ($request) {
                     foreach ($request->asset_tags as $tag) {
                         $normalizedTag = strtolower($tag);
-                        
                         if ($normalizedTag === 'audio') {
                             $subQuery->orWhereHas('orderMenuItem', function ($menuQuery) {
                                 $menuQuery->whereIn('order_menu_category_id', [1, 2, 3]);
@@ -355,7 +287,7 @@ class OrderController extends Controller
             });
         }
 
-        // RBAC BOUNDARY
+        // Apply tenant boundary constraints cleanly before execution
         if (!$user->hasAnyRole(['Super Admin', 'Admin', 'Supervisor'])) {
             $ordersQuery->where(function ($query) use ($user) {
                 $query->where('ordered_by_id', $user->id)
@@ -363,6 +295,53 @@ class OrderController extends Controller
                         $q->where('organisation_id', $user->organisation_id);
                     });
             });
+        }
+
+        // Only pulls rows that matched the filters
+        $orders = $ordersQuery->latest()->get();
+        $orderIds = $orders->pluck('id');
+
+        if ($orderIds->isNotEmpty()) {
+            // Flat lookups for Collaborators Map
+            $collaboratorsMap = DB::table('users')
+                ->join('order_item_assignee', 'users.id', '=', 'order_item_assignee.user_id')
+                ->join('order_items', 'order_item_assignee.order_item_id', '=', 'order_items.id')
+                ->whereIn('order_items.order_id', $orderIds)
+                ->select(['users.id', 'users.first_name', 'users.last_name', 'users.avatar', 'order_items.order_id'])
+                ->distinct()
+                ->get()
+                ->groupBy('order_id');
+
+            // Flat lookups for Menu Category Tags Map
+            $categoryMap = DB::table('order_items')
+                ->join('order_menu_items', 'order_items.order_menu_item_id', '=', 'order_menu_items.id')
+                ->whereIn('order_items.order_id', $orderIds)
+                ->select(['order_items.order_id', 'order_menu_items.order_menu_category_id'])
+                ->distinct()
+                ->get()
+                ->groupBy('order_id');
+
+            // Single-pass hydration loop
+            foreach ($orders as $order) {
+                $order->collaborators = $collaboratorsMap->get($order->id, collect())->map(function ($user) {
+                    return [
+                        'id'         => $user->id,
+                        'first_name' => $user->first_name,
+                        'last_name'  => $user->last_name,
+                        'avatar'     => $user->avatar,
+                    ];
+                })->values();
+
+                $orderCategoryIds = $categoryMap->get($order->id, collect())->pluck('order_menu_category_id')->toArray();
+                
+                $tags = [];
+                if (count(array_intersect($orderCategoryIds, [1, 2, 3])) > 0) { $tags[] = 'Audio'; }
+                if (in_array(4, $orderCategoryIds)) { $tags[] = 'Art'; }
+
+                $order->tags = $tags;
+                $order->unsetRelation('orderItems');
+                $order->makeHidden(['orderItems', 'order_items']);
+            }
         }
 
         return response()->json(['data' => $orders], 200);
