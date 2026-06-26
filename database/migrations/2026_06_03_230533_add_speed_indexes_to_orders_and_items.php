@@ -9,22 +9,22 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->index('tour_id'); 
+            $table->index('tour_id', 'submitted_at'); 
         });
 
         Schema::table('order_items', function (Blueprint $table) {
-            $table->index('order_id');
+            $table->index('order_id', 'order_item_status_id');
         });
     }
 
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropIndex(['tour_id']);
+            $table->dropIndex(['tour_id', 'submitted_at']);
         });
 
         Schema::table('order_items', function (Blueprint $table) {
-            $table->dropIndex(['order_id']);
+            $table->dropIndex(['order_id', 'order_item_status_id']);
         });
     }
 };

@@ -16,7 +16,7 @@ class TourController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $tourQuery = Tour::select(['id', 'name', 'created_at', 'updated_at']);
+        $tourQuery = Tour::select(['id', 'name', 'created_at']);
 
         // GLOBAL SERVER-SIDE ADVANCED FILTERS + SIDEBAR VIEWS LAYER
         if ($request->hasAny(['client_ids', 'assignee_ids', 'statuses', 'is_international', 'tags', 'asset_tags', 'filter'])) {
