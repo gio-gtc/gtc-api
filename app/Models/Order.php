@@ -124,7 +124,7 @@ class Order extends Model
      */
     public function getItemStatusesAttribute(): array
     {
-        if (!$this->relationLoaded('orderItems') && !$this->orderItems) {
+        if (!$this->relationLoaded('orderItems')) {
             return [];
         }
 
@@ -170,6 +170,7 @@ class Order extends Model
             'revision_number',
             'specifiable_id',
             'specifiable_type',
+            'asset_path'
         ]);
     }
 
@@ -202,6 +203,10 @@ class Order extends Model
         $missingArt = false;
 
         foreach ($this->orderItems as $item) {
+            if (!$item->relationLoaded('statusLookup') || !$item->relationLoaded('orderMenuItem')) {
+                continue;
+            }
+            
             $statusName = $item->statusLookup?->name;
             
             if (in_array($statusName, ['Cancelled', 'Still In Cart'])) {
@@ -229,7 +234,6 @@ class Order extends Model
     /**
      * Synchronize the Order status pivot table and discipline tags dynamically
      */
-
     public function syncStatusAndTags(): void
     {
         $items = $this->orderItems()

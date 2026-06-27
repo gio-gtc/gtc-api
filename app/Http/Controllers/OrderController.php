@@ -152,15 +152,23 @@ class OrderController extends Controller
     public function show(Order $order): JsonResponse
     {
         $order->load([
-            'venue',
-            'tour',
-            'client',
-            'showDates',
-            'orderItems.orderMenuItem.category',
-            'orderItems.assignees',
-            'orderItems.statusLookup', 
-            'orderItems.specifiable',
-            'invoices.lines.orderItem.statusLookup'
+            'venue:id,name,city,state',
+            'tour:id,name',
+            'client:id,first_name,last_name,email,organisation_id',
+            'showDates:id,order_id,show_date',
+            'orderItems' => function($query) {
+                $query->select([
+                    'id', 'order_id', 'order_menu_item_id', 'order_item_status_id', 
+                    'due_date', 'asset_path', 'specifiable_id', 'specifiable_type'
+                ]);
+            },
+            'orderItems.orderMenuItem:id,name,billing_code,order_menu_category_id',
+            'orderItems.statusLookup:id,name',
+            'orderItems.assignees:id,first_name,last_name,avatar',
+            'invoices.lines' => function($query) {
+                $query->select(['id', 'invoice_id', 'order_item_id', 'description', 'unit_price', 'quantity', 'total']);
+            },
+            'invoices.lines.orderItem.statusLookup:id,name'
         ]);
 
         return response()->json([
